@@ -1,5 +1,6 @@
-# Petpet http server [Bun.js + TS]  
-## Petpet http server writtn in TS, supportd with Bun.js APIs, Hono and Sharp  
+# Petpet http server  
+
+## Petpet http server written in TS, supported with Bun.js, Hono and Sharp.js  
 
 To install Bun:  
 1. Head over to [Bun's official page](https://bun.sh)  
@@ -27,5 +28,3 @@ bun start -h
 ```
 
 You can spesify runtime options in `config.toml` or `.env` files. Read `configuration.md` file for more  
-
-This project was created using `bun init` in bun v1.1.24. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime!  
