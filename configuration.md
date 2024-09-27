@@ -26,6 +26,10 @@ cache_type = "in-code"
 
 # Wether to output some information during work, or to be compleately quiet with no output
 quiet = false
+```
 
-
+## Env configuration (`.env`) (default value are used):
+```env
+# Time in ms to cache the gif from last use
+cache_time = 900000
 ```
