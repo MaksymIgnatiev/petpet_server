@@ -1,8 +1,16 @@
-import type { User as PetPet, PetPetParams } from "./types"
-import path from "path"
+if (process.argv[1].match(/petpet(.ts)?$/))
+	console.log(
+		error(
+			`File ${green("@/src/petpet.ts")} is a library file and is not intended to be run directly`,
+		),
+	),
+		process.exit()
+
+import type { PetPetParams } from "./types"
+import path, { resolve } from "path"
 import sharp from "sharp"
 import { GifCodec, GifFrame, GifUtil, BitmapImage } from "gifwrap"
-import { updatePetPet } from "./functions"
+import { error, green } from "./functions"
 
 var handGIFBuffer = Buffer.from(
 		await Bun.file(
@@ -10,49 +18,50 @@ var handGIFBuffer = Buffer.from(
 		).arrayBuffer(),
 	),
 	sharpBlankImageOpts = { r: 0, g: 0, b: 0, alpha: 0 },
+	gifEncodeOpts = { loops: 0, colorScope: 0 as 0 | 1 | 2 | undefined },
+	finaSharplImageOpts = { palette: true, colors: 256, dither: 1 },
 	handGif = await GifUtil.read(handGIFBuffer),
 	handFrames = handGif.frames.filter((_, i) => !(i % 2)),
+	FrameCount = handFrames.length,
 	handGifDimensions = {
 		width: handGif.width,
 		height: handGif.height,
 	}
+export var defaultPetPetParams: {
+	+readonly [K in keyof PetPetParams]-?: PetPetParams[K]
+} = {
+	shiftX: 0,
+	shiftY: 0,
+	size: 90,
+	fps: 16,
+	resizeX: 0,
+	resizeY: 0,
+	squeeze: 10,
+}
 
 export async function generatePetPet(
-	petpet: PetPet,
+	avatar: Buffer,
 	params: PetPetParams = {},
 ) {
 	var {
-		shiftX = 0,
-		shiftY = 0,
-		size = 90,
-		fps = 16,
-		resizeX = 0,
-		resizeY = 0,
-		squeeze = 10,
-	} = params
-	console.time("Fetching avatar")
-	var avatar = await fetchAvatar(petpet.id)
-	console.timeEnd("Fetching avatar")
-
-	// console.log("Params for gif:", {
-	// size,
-	// fps,
-	// shiftX,
-	// shiftY,
-	// resizeX,
-	// resizeY,
-	// })
-
-	fps = ~~(100 / fps)
-
-	if (!(avatar instanceof Buffer)) return avatar
-
-	var gifCodec = new GifCodec(),
+			shiftX = defaultPetPetParams.shiftX,
+			shiftY = defaultPetPetParams.shiftY,
+			size = defaultPetPetParams.size,
+			fps = defaultPetPetParams.fps,
+			resizeX = defaultPetPetParams.resizeX,
+			resizeY = defaultPetPetParams.resizeY,
+			squeeze = defaultPetPetParams.squeeze,
+		} = params,
+		gifCodec = new GifCodec(),
 		frames: GifFrame[] = [],
 		baseShift = 1,
 		expansionFactor = 0.5
 
-	for (var i = 0, l = handFrames.length, m = Math.floor(l / 2); i < l; i++) {
+	// Normalize fps for gifwrap.GifFrame
+	// 1s = 1000ms = 100cs
+	fps = ~~(100 / fps)
+
+	for (var i = 0, m = Math.floor(FrameCount / 2); i < FrameCount; i++) {
 		var progress = Math.round((1 - Math.abs(i - m) / m) * squeeze),
 			needShift = i > m,
 			shiftBase = needShift ? baseShift : 0,
@@ -108,7 +117,7 @@ export async function generatePetPet(
 						left: 0,
 					},
 				])
-				.png({ palette: true, colors: 256, dither: 1 })
+				.png(finaSharplImageOpts)
 				.raw()
 				.toBuffer(),
 			bitmap = new BitmapImage(
@@ -128,19 +137,20 @@ export async function generatePetPet(
 			),
 		)
 	}
-	var gifBuffer = (
-		await gifCodec.encodeGif(frames, { loops: 0, colorScope: 0 })
-	).buffer
 
-	petpet.gif = gifBuffer
-	petpet.hasImage = true
-	updatePetPet(petpet)
-
-	return gifBuffer
+	return new Promise<Buffer>((resolve) =>
+		gifCodec
+			.encodeGif(frames, gifEncodeOpts)
+			.then((obj) => resolve(obj.buffer)),
+	)
 }
 
 export async function fetchAvatar(id: string) {
-	var response = await fetch(`https://avatar.cdev.shop/${id}`)
-	if (!response.ok) return response
-	return Buffer.from(await response.arrayBuffer())
+	return new Promise<Buffer | Response>((r) => {
+		fetch(`https://avatar.cdev.shop/${id}`).then((res) =>
+			res.ok
+				? res.arrayBuffer().then((data) => r(Buffer.from(data)))
+				: r(res),
+		)
+	})
 }

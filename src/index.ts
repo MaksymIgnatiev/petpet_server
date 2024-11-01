@@ -1,128 +1,126 @@
+import fs from "fs"
 import { Hono } from "hono"
-import { fetchAvatar, generatePetPet } from "./petpet"
+import { defaultPetPetParams, fetchAvatar, generatePetPet } from "./petpet"
 import { logger } from "hono/logger"
-import type { Avatars, User, Users as Petpets } from "./types"
+import type { PetPetType, PetPetParams, Hash } from "./types"
+
 import {
-	checkPetPetToLongInCache,
 	checkValidRequestParams,
-	createPetPet,
-	deletePetPet,
-	getPetPet,
-	processFlags,
-	updatePetPet,
+	error,
+	getConfig,
+	green,
+	info,
+	isLogfeatureEnabled,
+	log,
+	warning,
 } from "./functions"
+import { getGlobalOption, getServerOption } from "./config"
+import { PetPet } from "./db"
+import { processFlags } from "./flags"
+import type { Server } from "bun"
 
 var args = process.argv.slice(2),
 	app = new Hono(),
-	server = Bun.serve({
-		fetch() {
-			return new Response("")
-		},
-	}),
+	server: Server = {} as Server,
 	intervalID: Timer,
 	chechCache = () => {
-		// console.log("Performing cleanup")
-
-		var i = 0
+		/* var i = 0
 		for (var hash in petpets)
-			if ((i += +checkPetPetToLongInCache(hash))) deletePetPet(hash)
+			if ((i += +checkPetPetCache(hash))) deletePetPet(hash)
 		// console.log(`Found: ${i} outdated petpets`)
 		if (i > 0)
 			console.log(
-				`${i} user${i > 1 ? "s" : ""} ${i > 1 ? "were" : "was"} deleted from cache.`,
-			)
+				`${i} user${i ? "s" : ""} ${i ? "were" : "was"} deleted from cache.`,
+			) */
 	}
 
-export var petpets: Petpets = {},
-	avatars: Avatars = {}
-
-app.use("/:id", logger())
+app.use("/:id", async (c, next) => {
+	if (isLogfeatureEnabled("rest")) logger()(c, next)
+})
 
 app.get("/:id", async (c) => {
 	var userID = c.req.param("id"),
-		shift = c.req.query("shift"),
-		update = !!c.req.query("upd"),
-		size = c.req.query("size"),
-		resize = c.req.query("resize"),
-		fps = c.req.query("fps"),
-		squeeze = c.req.query("squeeze"),
+		shiftRaw = c.req.query("shift"),
+		updateRaw = !!c.req.url.match(/[?&]upd(&|=|$)/),
+		sizeRaw = c.req.query("size"),
+		resizeRaw = c.req.query("resize"),
+		fpsRaw = c.req.query("fps"),
+		squeezeRaw = c.req.query("squeeze"),
 		needNeewImage = false,
-		shiftX = 0,
-		shiftY = 0,
-		size_ = 100,
-		fps_ = 16,
-		squeeze_ = 15,
-		resizeX = 0,
-		resizeY = 0,
-		validParams = checkValidRequestParams(c, {
+		shiftX = defaultPetPetParams.shiftX,
+		shiftY = defaultPetPetParams.shiftY,
+		size = defaultPetPetParams.size,
+		fps = defaultPetPetParams.fps,
+		resizeX = defaultPetPetParams.resizeX,
+		resizeY = defaultPetPetParams.resizeY,
+		squeeze = defaultPetPetParams.squeeze,
+		notValidParams = checkValidRequestParams(c, {
 			userID,
-			shift,
-			size,
-			resize,
-			fps,
-			squeeze,
+			shift: shiftRaw,
+			size: sizeRaw,
+			resize: resizeRaw,
+			fps: fpsRaw,
+			squeeze: squeezeRaw,
 		})
 
 	// console.log("Request params: ", { userID, shift, size, resize, fps })
-	if (validParams) return validParams
+	if (notValidParams) return notValidParams
 
-	var petpetHash = `${userID}${shift}${size}${resize}${fps}`
+	var petpetHash: Hash = `${userID}-${shiftRaw}-${sizeRaw}-${resizeRaw}-${fpsRaw}-${squeezeRaw}`
 
-	if (shift) [shiftX, shiftY] = shift.split("x").map(Number)
-	if (size) size_ = +size
-	if (fps) fps_ = +fps
-	if (resize) [resizeX, resizeY] = resize.split("x").map(Number)
-	if (squeeze) squeeze_ = +squeeze
+	if (shiftRaw) [shiftX, shiftY] = shiftRaw.split("x").map(Number)
+	if (sizeRaw) size = +sizeRaw
+	if (fpsRaw) fps = +fpsRaw
+	if (resizeRaw) [resizeX, resizeY] = resizeRaw.split("x").map(Number)
+	if (squeezeRaw) squeeze = +squeezeRaw
+	var petpetParams: PetPetParams = {
+		shiftX,
+		shiftY,
+		size,
+		fps,
+		resizeX,
+		resizeY,
+		squeeze,
+	}
 
 	try {
-		var user: User,
-			tempuser = getPetPet(petpetHash)
+		var petpet: PetPet,
+			tempPetpet = getPetPet(petpetHash)
 
-		if (tempuser) {
-			// console.log("User was in cache!")
-			user = tempuser
-		} else {
-			user = createPetPet(petpetHash, userID)
-			// console.log("User created!")
+		if (tempPetpet) petpet = tempPetpet
+		else {
+			petpet = createPetPet(petpetHash, userID)
 		}
 
-		needNeewImage = !tempuser || update || !user.hasImage
+		needNeewImage = !tempPetpet || updateRaw
 
 		if (!needNeewImage) {
-			console.log("Gif was in cache")
-			user.lastSeen = Date.now()
-			updatePetPet(user)
-			return new Response(user.gif, {
+			// console.log("Gif was in cache")
+			petpet.lastSeen = Date.now()
+			updatePetPet(petpet)
+			return new Response(petpet.gif, {
 				headers: { "Content-Type": "image/gif" },
 			})
 		}
 
-		console.time("Gif created")
+		// console.time("Gif created")
 
-		var gif = await generatePetPet(user, {
-			shiftX,
-			shiftY,
-			size: size_,
-			fps: fps_,
-			resizeX,
-			resizeY,
-			squeeze: squeeze_,
-		})
+		var gif = await generatePetPet(petpet)
 
-		console.timeEnd("Gif created")
+		// console.timeEnd("Gif created")
 
 		if (gif instanceof Response) {
 			return c.json(
 				{
-					error: `Failed to get the user's avatar"}`,
+					error: `Failed to get the user's avatar"`,
 					response: gif,
 				},
 				{ status: gif.status },
 			)
 		} else {
-			user.gif = gif
-			user.lastSeen = Date.now()
-			updatePetPet(user)
+			petpet.gif = gif
+			petpet.lastSeen = Date.now()
+			updatePetPet(petpet)
 			return new Response(gif, {
 				headers: {
 					"Content-Type": "image/gif",
@@ -152,6 +150,7 @@ app.get("/avatar/:id", async (c) => {
 		return c.json(
 			{
 				ok: false,
+				code: 400,
 				message: "Invalid ID. ID must contain only digits from 0 to 9",
 			},
 			{ status: 400 },
@@ -168,22 +167,35 @@ app.get("/avatar/:id", async (c) => {
 
 app.get("*", (c) => c.json({ ok: true }, 204))
 
+function setupWatch() {
+	var watcher = fs.watch(".", (_, filename) => {
+		var configFile = getGlobalOption("configFile")
+		if (!getGlobalOption("useConfig")) return
+		else if (filename === "config.toml") getConfig()
+		else if (filename === ".env")
+			if (configFile === "default" || configFile === ".env") getConfig()
+	})
+	watcher.on("error", (e) =>
+		log("error", error(`Error while watching config files for change`), e),
+	)
+	return watcher
+}
+
 function restart() {
 	if (intervalID) clearInterval(intervalID)
-
 	processFlags(args)
 
 	intervalID = setInterval(chechCache, 60_000)
 
-	if (server) server.stop()
+	if (server) server?.stop?.()
 
 	server = Bun.serve({
 		fetch: app.fetch,
-		port: 3000,
-		// hostname: "0.0.0.0",
+		port: getServerOption("port"),
+		hostname: getServerOption("host"),
 	})
+
+	log("info", `Listening on URL: ${green(server.url)}`)
 }
 
 restart()
-
-if (server) console.log(`Listening on URL: \x1b[32m${server.url}\x1b[0m`)
