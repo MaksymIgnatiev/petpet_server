@@ -10,5 +10,6 @@ They will be applied in such order:
 - If none of thee files are spesifid - default values will be used  
 
 Or in other words: `config.toml` > `.env` > `default`
+
 ---
 Use the `bun start -g [toml|env]` command to generate a config file with default values to see and modify them to the needs.
