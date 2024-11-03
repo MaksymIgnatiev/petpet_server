@@ -1,5 +1,5 @@
 class Config implements GlobalOptions {
-	#state: GlobalOptions["state"] = "original"
+	#state: GlobalOptions["state"] = "ready"
 	version = "0.1.0"
 	avatars!: GlobalOptions["avatars"]
 	cache!: GlobalOptions["cache"]
@@ -32,32 +32,30 @@ class Config implements GlobalOptions {
 		}
 	}
 	private checkSetStateCallStack(stack: string) {
-		return !!stack
-			.split(/\n+/)
-			.some((l) => l.match(/[ \t]*at setState.+config.ts/))
+		return /[ \t]*at setState.+config.ts/.test(stack)
 	}
 	private checkGetStateCallStack(stack: string) {
-		return !!stack
-			.split(/\n+/)
-			.some((l) =>
-				l.match(/[ \t]*at (getState|setGlobalOption).+config.ts/),
-			)
+		return /[ \t]*at (getState|setGlobalOption).+config.ts/.test(stack)
 	}
 	get state() {
-		if (this.checkGetStateCallStack(new Error().stack ?? ""))
+		if (this.checkGetStateCallStack(new Error().stack ?? "")) {
 			return this.#state
-		else
+		} else {
+			// Do not try to get the value of the 'state' field from other place, because it can be unsafe
 			throw new Error(
 				"Global option 'state' was retrieved from another place. It is preferable to use the 'getState' function",
 			)
+		}
 	}
 	set state(value) {
-		if (this.checkSetStateCallStack(new Error().stack ?? ""))
+		if (this.checkSetStateCallStack(new Error().stack ?? "")) {
 			this.#state = value
-		else
+		} else {
+			// Do not try to set the value of the 'state' field from other place, because it can be unsafe
 			throw new Error(
 				"Global option 'state' was set from another place. It is preferable to use the 'setState' function",
 			)
+		}
 	}
 }
 
@@ -76,7 +74,7 @@ var globalOptionsDefault: AllGlobalConfigOptions = {
 		permanentCache: false,
 		watch: false,
 		timestamps: false,
-		timestampFormat: "s:m:h D.M.Y",
+		timestampFormat: "h:m:s D.M.Y",
 		logOptions: {
 			rest: false,
 			gif: false,
@@ -125,7 +123,7 @@ import type {
 	Values,
 } from "./types"
 
-var stateList = ["original", "configuring", "ready"] satisfies UnionToTuple<
+var stateList = ["configuring", "ready"] satisfies UnionToTuple<
 	GlobalOptions["state"]
 >
 
@@ -142,6 +140,7 @@ export var priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
 	stringOptions: (keyof FilteredStringConfigProps)[] = [
 		"configFile",
 		"cacheType",
+		"timestampFormat",
 	],
 	booleanOptions: (keyof FilteredBooleanConfigProps)[] = [
 		"avatars",
@@ -152,6 +151,7 @@ export var priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
 		"quiet",
 		"warnings",
 		"watch",
+		"timestamps",
 	],
 	objectOptions: (keyof FilteredObjectConfigProps)[] = [
 		"server",
@@ -244,10 +244,6 @@ function resetGlobalOptions(
 			else (objToSet.value = root[key]), (objToSet.source = "original")
 }
 
-export function logGlobalOptions() {
-	console.log(globalOptions)
-}
-
 type FilteredObjectProperties = FilterObjectProps<
 	GlobalOptions,
 	Record<string, GlobalOptionProp<any>>
@@ -275,31 +271,6 @@ export function comparePriorities<
 	return (
 		p1 === p2 ? 0 : p1 < p2 ? -1 : p1 > p2 ? 1 : 0
 	) as ComparePriorities<P1, P2>
-}
-
-export function setGlobalObjectOption<
-	O extends keyof FilteredObjectProperties,
-	P extends keyof FilteredObjectProperties[O],
-	V extends FilteredObjectProperties[O][P] extends GlobalOptionProp<any>
-		? FilteredObjectProperties[O][P]["value"]
-		: never,
-	S extends GlobalOptionPropPriorityAll,
->(obj: O, option: P, value: V, priority: S) {
-	if (hasNullable(obj, option, value, priority)) return
-	if (
-		comparePriorities(
-			(globalOptions[obj][option] as GlobalOptionProp<V>).source,
-			priority,
-		) < 1
-	)
-		return
-	if (!Object.hasOwn(globalOptions, obj)) return
-	if (!Object.hasOwn(globalOptions[obj], option)) return
-	if (typeof globalOptions[obj][option] !== typeof value) return
-	var optionObj = globalOptions[obj][option] as GlobalOptionProp<V>
-
-	optionObj.value = value
-	optionObj.source = normalizePriority(priority, "string")
 }
 
 type GetPriotiry<
@@ -388,6 +359,7 @@ export function getPriorityForOption<O extends keyof GlobalOptionsValues>(
 function createGlobalOptionObjectSetter<
 	O extends keyof FilteredObjectProperties,
 >(object: O) {
+	/** Sets the global object property, and returns a boolean value representing status of the process (true=`success`, false=`failure`) */
 	return function <
 		K extends keyof FilteredObjectProperties[O],
 		V extends FilteredObjectProperties[O][K] extends GlobalOptionProp<any>
@@ -396,47 +368,34 @@ function createGlobalOptionObjectSetter<
 		P extends GlobalOptionPropPriorityAll,
 	>(option: K, value: V, priority: P) {
 		var success = true
-		if (hasNullable(option, value, priority)) success = false
-		else if (!Object.hasOwn(globalOptions[object], option)) success = false
-		else if (typeof globalOptions[object][option] !== typeof value)
-			success = false
-		else {
+		if (
+			!hasNullable(option, value, priority) &&
+			Object.hasOwn(globalOptions[object], option) &&
+			typeof globalOptions[object][option] === typeof value
+		) {
 			var optionObj = globalOptions[object][option] as GlobalOptionProp<V>
 
 			optionObj.value = value
 			optionObj.source = normalizePriority(priority, "string")
+			success = true
 		}
 		return success
 	}
 }
 
+function createGlobalOptionObjectGetter<
+	O extends keyof FilteredObjectProperties,
+>(object: O) {
+	return function <P extends keyof FilteredObjectProperties[O]>(
+		option: P,
+	): GlobalOptions[O][P] extends GlobalOptionProp<any>
+		? GlobalOptions[O][P]["value"]
+		: never {
+		return (globalOptions[object][option] as GlobalOptionProp<any>).value
+	}
+}
+
 export var setServerOption = createGlobalOptionObjectSetter("server")
+export var getServerOption = createGlobalOptionObjectGetter("server")
 export var setLogOption = createGlobalOptionObjectSetter("logOptions")
-
-/* export function setLogOption<
-	O extends keyof LogOptions,
-	V extends LogOptions[O],
-	P extends GlobalOptionPropPriorityAll,
->(option: O, value: V, priority: P) {
-	if (hasNullable(option, value, priority)) return
-} */
-
-/** Checks if log option is turned on or of */
-export function getLogOption<O extends keyof LogOptions>(option: O) {
-	return (
-		hasNullable(option)
-			? false
-			: (globalOptions.logOptions[option] ?? false)
-	) as boolean
-}
-
-/** Returns server config option */
-export function getServerOption<O extends keyof ServerOptions>(
-	option: O,
-): ServerOptions[O] {
-	return (
-		hasNullable(option)
-			? undefined
-			: (globalOptions.server[option]?.value ?? undefined)
-	) as ServerOptions[O]
-}
+export var getLogOption = createGlobalOptionObjectGetter("logOptions")

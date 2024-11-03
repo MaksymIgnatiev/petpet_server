@@ -109,7 +109,7 @@ addFullFlagOption(
 addFullFlagOption(
 	["-t", "--timestamps"],
 	"[format]",
-	`Include timestamps in all logging stuff, and optionaly pass the format how to output timestamp. See ${green("TIMESTAMP FORMAT")} (default=${green('"s:m:h D.M.Y"')})`,
+	`Include timestamps in all logging stuff, and optionaly pass the format how to output timestamp. See ${green("TIMESTAMP FORMAT")} (default=${green('"h:m:s D.M.Y"')})`,
 )
 addFullFlagOption(
 	["-g", "--gen-config"],

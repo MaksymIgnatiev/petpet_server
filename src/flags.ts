@@ -6,185 +6,175 @@ if (process.argv[1].match(/flags(.ts)?$/))
 	),
 		process.exit()
 
-import { error, errorAndExit, green, isStringNumber } from "./functions"
+import { error, green, isStringNumber } from "./functions"
 import { getVersion, setGlobalOption, setState } from "./config"
 import printHelp, { helpFlags } from "./help"
-import type {
-	Flag,
-	FlagFull,
-	FlagMaps,
-	FlagShort,
-	FlagShortFull,
-	FlagShortRequire,
-	FlagTupleFull,
-	RequiredFlag,
-	UnionToTuple,
-} from "./types"
+import type { Flag as FlagType, FlagValue, UnionToTuple } from "./types"
 
-type FlagHandlerParam<F extends keyof FlagShortRequire> =
-	FlagShortRequire[F] extends never
-		? []
-		: IsOptionalflag<F> extends true
-			? [value?: string]
-			: [value: string]
+type Flag<T extends FlagValue> = Omit<FlagType<T>, "description" | "parameter">
 
-type FlagHandler<F extends keyof FlagShortRequire = keyof FlagShortRequire> = {
-	required: IsRequiredflag<F>
-	optional: IsOptionalflag<F>
-	handler: (...args: FlagHandlerParam<F>) => void
-}
-
-var flagHandlers: Map<FlagFull, FlagHandler> = new Map(),
-	flagRegex = /^-([a-z]|-[a-z\-]+)$/,
+var flagRegex = /^-([a-z]|-[a-z\-]+)$/,
 	readHelpPage =
 		`Run '${green("bun run help")}' or '${green("bun start -h")}' to read the help page to see the correct flag usage` as const,
-	flagHandlerDefaultOpts = {
-		required: false,
-		optional: false,
-	},
 	isFlagError = false,
 	exit = false,
 	flagErrors = {
 		noProp(flag: string) {
-			flagError(
+			errorLog(
 				`Expected argument for flag '${green(flag)}', but argument was not provided`,
 			)
 			isFlagError ||= true
 		},
 		nextFlag(flag: string) {
-			flagError(
+			errorLog(
 				`Expected argument for flag '${green(flag)}', but next flag was passed`,
 			)
 
 			isFlagError ||= true
 		},
 		notRecognized(flag: string) {
-			flagError(`Flag '${green(flag)}' is not recognized as valid`)
+			errorLog(`Flag '${green(flag)}' is not recognized as valid`)
 			isFlagError ||= true
+		},
+	},
+	flagMaps: Map<string, Flag<FlagValue>> = new Map(),
+	addFlag = {
+		verbose(flag: Flag<"none">) {
+			addFlagHandler(flag)
+		},
+		optional(flag: Flag<"optional">) {
+			addFlagHandler(flag)
+		},
+		required(flag: Flag<"required">) {
+			addFlagHandler(flag)
 		},
 	}
 
-function createFlagHandler<F extends keyof FlagShortRequire>(
-	handler: (...args: FlagHandlerParam<F>) => void,
-	options = flagHandlerDefaultOpts as FlagHandlerOptsType<F>,
-): FlagHandler<F> {
-	return {
-		required: (options.required ?? false) as IsRequiredflag<F>,
-		optional: (options.optional ?? false) as IsOptionalflag<F>,
-		handler,
-	}
-}
-
-function addFlagHandler<F extends keyof FlagShortRequire>(
-	flags: FlagTupleFull,
-	flagHandler: FlagHandler<F>,
-) {
-	for (var flag of flags)
-		flagHandlers.set(
-			flag,
-			flagHandler as unknown as FlagHandler<keyof FlagShortRequire>,
-		)
-}
-
-type FlagHandlerOptsType<F extends keyof FlagShortRequire> = Partial<{
-	required: IsRequiredflag<F>
-	optional: IsOptionalflag<F>
-}>
-
-type IsRequiredflag<F extends keyof FlagShortRequire> =
-	RequiredFlag<F> extends "required" ? true : false
-type IsOptionalflag<F extends keyof FlagShortRequire> =
-	RequiredFlag<F> extends "optional" ? true : false
-
-function newFlagHandler<
-	SF extends keyof FlagShortRequire,
-	LF extends FlagMaps[SF] = FlagMaps[SF],
->(
-	flags: [`-${SF}`, `--${LF}`],
-	handler: (...args: FlagHandlerParam<SF>) => void,
-	options = flagHandlerDefaultOpts as FlagHandlerOptsType<SF>,
-) {
-	addFlagHandler(flags, createFlagHandler(handler, options))
+function addFlagHandler<V extends FlagValue>(flag: Flag<V>) {
+	if (flag.short) flagMaps.set(`-${flag.short}`, flag)
+	flagMaps.set(`--${flag.long}`, flag)
 }
 
 function setupFlagHandlers() {
-	newFlagHandler(
-		["-h", "--help"],
-		(value) => (
-			printHelp(value as (typeof helpFlags)[number]), (exit = true)
-		),
-		{ optional: true },
-	)
-	newFlagHandler(
-		["-v", "--version"],
-		() => (console.log(getVersion()), (exit = true)),
-	)
-	newFlagHandler(["-q", "--quiet"], () => setGlobalOption("quiet", true, 1))
-	newFlagHandler(["-C", "--no-cache"], () =>
-		setGlobalOption("cache", false, 1),
-	)
-	newFlagHandler(["-A", "--no-avatars"], () =>
-		setGlobalOption("avatars", false, 1),
-	)
-	newFlagHandler(["-L", "--log-features"], () =>
-		setGlobalOption("logFeatures", true, 1),
-	)
-	newFlagHandler(
-		["-g", "--gen-config"],
-		(value) => {
+	addFlag.optional({
+		short: "h",
+		long: "help",
+		value: "optional",
+		handler(value) {
+			printHelp(value as (typeof helpFlags)[number])
+			exit = true
+		},
+	})
+
+	addFlag.verbose({
+		short: "v",
+		long: "version",
+		value: "none",
+		handler() {
+			console.log(getVersion())
+			exit = true
+		},
+	})
+
+	addFlag.verbose({
+		short: "q",
+		long: "quiet",
+		value: "none",
+		handler() {
+			setGlobalOption("quiet", true, 1)
+		},
+	})
+
+	addFlag.verbose({
+		short: "C",
+		long: "no-cache",
+		value: "none",
+		handler() {
+			setGlobalOption("cache", false, 1)
+		},
+	})
+
+	addFlag.verbose({
+		short: "A",
+		long: "no-avatars",
+		value: "none",
+		handler() {
+			setGlobalOption("avatars", false, 1)
+		},
+	})
+
+	addFlag.verbose({
+		short: "L",
+		long: "log-features",
+		value: "none",
+		handler() {
+			setGlobalOption("logFeatures", true, 1)
+		},
+	})
+
+	addFlag.optional({
+		short: "g",
+		long: "gen-config",
+		value: "optional",
+		handler(value) {
 			if (value) {
 				if (value === "toml") {
-					// genConfig("toml")
 					console.log(
 						`Generated configuration file for type: '${green("toml")}'`,
 					)
 				} else if (value === "env") {
-					// genConfig("env")
 					console.log(
 						`Generated configuration file for type: '${green("env")}'`,
 					)
-				} else
+				} else {
 					console.log(
 						error(
 							`Unknown configuration type for flag 'gen-config': '${green(value)}'`,
 						),
 					)
+				}
 			} else {
-				// genConfig("toml")
 				console.log(
 					`Generated configuration file for type: '${green("toml")}' (default)`,
 				)
 			}
 			exit = true
 		},
-		{ optional: true },
-	)
+	})
 
-	newFlagHandler(
-		["-c", "--cache-time"],
-		(value: string) => {
+	addFlag.required({
+		short: "c",
+		long: "cache-time",
+		value: "required",
+		handler(value) {
 			if (value && isStringNumber(value)) {
 				setGlobalOption("cacheTime", +value, 1)
-			} else flagError(`Flag 'c' acceepted not a number parameter`)
+			} else {
+				errorLog(`Flag 'c' accepted a non-numeric parameter`)
+			}
 		},
-		{ required: true },
-	)
-	newFlagHandler(
-		["-t", "--timestamps"],
-		(value?: string) => {
+	})
+
+	addFlag.optional({
+		short: "t",
+		long: "timestamps",
+		value: "optional",
+		handler(value) {
 			setGlobalOption("timestamps", true, 1)
-			if (value) setGlobalOption("timestampFormat", value, 1)
+			if (value) {
+				setGlobalOption("timestampFormat", value, 1)
+			}
 		},
-		{ optional: true },
-	)
+	})
 }
 
-function flagError(text: string) {
+function errorLog(text: string) {
 	console.log(error(text))
 }
+
 export function processFlags(argList: string[]) {
 	setState("configuring")
-	if (flagHandlers.size === 0) setupFlagHandlers()
+	if (flags.size === 0) setupFlagHandlers()
 	var flagHandler: FlagHandler, nextArgument: string
 	for (var i = 0; i < argList.length; i++) {
 		var argument = argList[i] as Flag
@@ -194,8 +184,8 @@ export function processFlags(argList: string[]) {
 				...argument.slice(1),
 			] as UnionToTuple<FlagShortFull>) {
 				flagShort = `-${flagShort}` as FlagShortFull
-				if (flagHandlers.has(flagShort)) {
-					flagHandler = flagHandlers.get(flagShort)!
+				if (flags.has(flagShort)) {
+					flagHandler = flags.get(flagShort)!
 					if (!flagHandler.required) flagHandler.handler()
 					else flagErrors.noProp(flagShort)
 				} else flagErrors.notRecognized(flagShort)
@@ -203,8 +193,8 @@ export function processFlags(argList: string[]) {
 		} else if (flagRegex.test(argument)) {
 			// flag detected
 			var flag = argument as FlagFull
-			if (flagHandlers.has(flag)) {
-				flagHandler = flagHandlers.get(flag)!
+			if (flags.has(flag)) {
+				flagHandler = flags.get(flag)!
 				if (flagHandler.required) {
 					nextArgument = argList[i + 1]
 					if (nextArgument) {

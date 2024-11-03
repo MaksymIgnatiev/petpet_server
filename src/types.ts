@@ -137,7 +137,7 @@ export type BaseConfigOptions = {
 	server: ServerOptions
 	/** Include timestamps in all logging stuff (default=`false`) */
 	timestamps: boolean
-	/** Format for the timestamps represented with a string with formating characters (default=`"s:m:h D.M.Y"`)
+	/** Format for the timestamps represented with a string with formating characters (default=`"h:m:s D.M.Y"`)
 	 * `S` = milliseconds (from last second)
 	 * `s` = seconds (from last minute)
 	 * `m` = minutes (from last hour)
@@ -179,7 +179,7 @@ export type GlobalOptions = {
 	 * `"configuring"` - in process of configuring all runtime options
 	 * `"ready"` - when configuration is ready for usage (not in configuration phase)
 	 */
-	state: "original" | "configuring" | "ready"
+	state: "configuring" | "ready"
 } & ApplyGlobalOptionPropTypeRecursively<AllGlobalConfigOptions>
 
 // ----- Log Options -----
@@ -208,6 +208,7 @@ export type LogLevel = 0 | 1 | 2 | 3 | 4
 
 export type LogOptionLongCombination = Combinations<LogOptionLong, ",">
 export type LogOptionShortCombination = Combinations<LogOptionShort, ",">
+type LogOptionCombination = string
 export type LogOptionLong = keyof LogOptions
 export type LogOptionShort = {
 	[S in LogOptionLong]: S extends `${infer C}${infer _}` ? C : never
@@ -227,43 +228,40 @@ export type ServerOptions<
 
 // ----- Flag -----
 
-export type Flag = keyof FlagMaps | Values<FlagMaps>
+export type FlagValue = "none" | "optional" | "required"
 
-export type FlagShortNoRequire = keyof Omit<FlagMaps, FlagShortRequireUnion>
-export type FlagShort = keyof FlagShortRequire | FlagShortNoRequire
-export type FlagLongNoRequire = Values<Omit<FlagMaps, FlagShortRequireUnion>>
-export type FlagLong = keyof FlagLongRequire | FlagLongNoRequire
-export type FlagShortFull = `-${FlagShort}`
-export type FlagLongFull = `--${FlagLong}`
-export type FlagFull = FlagShortFull | FlagLongFull
-export type FlagShortRequireUnion = keyof FlagShortRequireBase
+export type FlagHandlerParam<T extends FlagValue> = T extends "none"
+	? []
+	: T extends "optional"
+		? [value?: string]
+		: [value: string]
 
-export type FlagTuple = [FlagShort, FlagLong]
-export type FlagTupleFull = [FlagShortFull, FlagLongFull]
+export type FlagParameter<T extends FlagValue> = T extends "none"
+	? never
+	: T extends "optional"
+		? `[${string}]`
+		: `<${string}>`
 
-export type RequiredFlag<T extends keyof FlagShortRequire> =
-	FlagShortRequire[T] extends never
-		? false
-		: undefined extends FlagShortRequire[T]
-			? "optional"
-			: "required"
-
-export type FlagArgs<T extends keyof FlagShortRequire> =
-	RequiredFlag<T> extends "required"
-		? [parameter: `<${string}>`, description: string]
-		: RequiredFlag<T> extends "optional"
-			? [parameter: `[${string}]`, description: string]
-			: [description: string]
-
-export type FlagShortRequire = {
-	[K in keyof FlagShortRequireBase]: FlagShortRequireBase[K]
-} & {
-	[T in FlagShortNoRequire]: never
-}
+export type Flag<T extends FlagValue> = T extends "none"
+	? {
+			short?: string
+			long: string
+			value: T
+			description: string
+			handler: (...args: FlagHandlerParam<T>) => void
+		}
+	: {
+			short?: string
+			long: string
+			value: T
+			parameter: FlagParameter<T>
+			description: string
+			handler: (...args: FlagHandlerParam<T>) => void
+		}
 
 type FlagShortRequireBase = {
 	/** Log level (0-4 | features...) */
-	l: LogLevel | Combinations<LogOptionShort, ",">
+	l: LogLevel | LogOptionCombination // | Combinations<LogOptionShort | LogOptionLong, ","> // ts is lagging
 	/** Cache time in milliseconds */
 	c: number
 	/** Generate config file with type: `"toml"` | `"env"` (default=`"toml"`)*/
@@ -279,9 +277,6 @@ type FlagShortRequireBase = {
 }
 
 // Same as above, but for long flags
-export type FlagLongRequire = {
-	[K in keyof FlagShortRequire as FlagMaps[K]]: FlagShortRequire[K]
-}
 
 export type FlagMaps = {
 	q: "quiet"
@@ -301,16 +296,11 @@ export type FlagMaps = {
 	H: "host"
 	P: "port"
 }
+type LongFlagsOnlyRequireBase = {
+	"cache-type": AllGlobalConfigOptions["cacheType"]
+}
 
-export type GetFlagProp<F extends Flag> = F extends FlagShort
-	? F extends "l" | "log"
-		? LogOption
-		: F extends "c" | "cache-time"
-			? number
-			: F extends "g" | "gen-config"
-				? FlagShortRequire["g"]
-				: never
-	: never
+export type LongFlagsOnly = "cache-type"
 
 // ----- Params -----
 
