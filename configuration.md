@@ -1,6 +1,6 @@
 # Configuration for the project
 
-### You can use both, the configuration files and command line arguments to specify features that you want to use in project. They will override the default values that can be found in `@/src/config.ts` file.
+You can use both, the configuration files and command line arguments to specify features that you want to use in project. They will override the default values that can be found in `@/src/config.ts` file.
 
 There are 2 configuration files available: `config.toml`, `.env`  
 They will be applied in such order:  
