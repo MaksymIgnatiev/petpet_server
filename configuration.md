@@ -1,6 +1,6 @@
 # Configuration for the project
 
-### You can us both, the configuration files and command flag arguments to spsify features that you want to use in project
+### You can use both, the configuration files and command line arguments to specify features that you want to use in project. They will override the default values that can be found in `@/src/config.ts` file.
 
 There are 2 configuration files available: `config.toml`, `.env`  
 They will be applied in such order:  
@@ -9,27 +9,6 @@ They will be applied in such order:
 - If `config.toml` is not specified, but `.env` is specified - `.env` will be used  
 - If none of thee files are spesifid - default values will be used  
 
-## Toml configuration (`config.toml`) (default values are used):
-
-```toml
-# Time in ms to cache the gif from last use
-cache_time = 900000
-
-# Wether to use cache or not
-cache = true
-
-# Wether to not perform a clean up after {cache_time} passed. Gifs will be stored in cache permanently
-petmanent_cache = false 
-
-# Cache type, store cache: "in-code" - in code directly; "fs" - in file system; "both" - both types together
-cache_type = "in-code"
-
-# Wether to output some information during work, or to be compleately quiet with no output
-quiet = false
-```
-
-## Env configuration (`.env`) (default value are used):
-```env
-# Time in ms to cache the gif from last use
-cache_time = 900000
-```
+Or in other words: `config.toml` > `.env` > `default`
+---
+Use the `bun start -g [toml|env]` command to generate a config file with default values to see and modify them to the needs.
