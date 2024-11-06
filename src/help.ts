@@ -5,8 +5,7 @@ export var helpFlags = [
 	"sections",
 ] as const
 var terminalWidth = process.stdout.columns || 80,
-	optionsColumnWidth = 33 as const,
-	flags: Section<FlagTuple, FlagRest> = new Map(),
+	optionsColumnWidth = 35 as const,
 	optionsLog: Section<string[], string> = new Map([
 		[["0"], "No logging"],
 		[["1"], "Requests and responses"],
@@ -41,92 +40,18 @@ var terminalWidth = process.stdout.columns || 80,
 		["log_options", "Show all available log options"],
 		["sections", "Show this message"],
 	])
+import { flagObjects, setupFlagHandlers } from "./flags"
 import { error, green, warning } from "./functions"
-import type {
-	FlagShort as FlagShortType,
-	FlagLong as FlagLongType,
-	FlagMaps,
-	FlagShortRequire,
-	FlagArgs,
-} from "./types"
-
-type ParameterRequired = `<${string}>`
-type ParameterOptional = `[${string}]`
-type Parameter = ParameterRequired | ParameterOptional
-
-type Option = string
-type FlagShort = `-${FlagShortType}`
-type FlagLong = `--${FlagLongType}`
-type FlagTuple = [FlagShort, FlagLong]
-type FlagRest = [Parameter | Parameter[], string] | string
+type FlagRest = [string | string[], string] | string
 type Section<
-	T extends FlagTuple | Option[] | Option = string[],
+	T extends string | string[] = string,
 	V extends FlagRest = FlagRest,
 > = Map<T, V>
 
-function addFullFlagOption<SF extends keyof FlagMaps, LF extends FlagMaps[SF]>(
-	flagsArr: [`-${SF}`, `--${LF}`],
-	...rest: FlagArgs<SF>
-) {
-	var options: FlagRest
-	if (rest.length === 1) options = rest[0]
-	else options = [rest[0], rest[1]] as FlagRest
-
-	flags.set(flagsArr, options)
-}
-
-addFullFlagOption(
-	["-h", "--help"],
-	"[section]",
-	`Display this help message or a spesific section (see ${green("SECTIONS")}) (alias is also '${green("bun run help")}')`,
-)
-addFullFlagOption(["-v", "--version"], "Display version and exit")
-addFullFlagOption(["-q", "--quiet"], "Run the server without any output")
-addFullFlagOption(
-	["-l", "--log"],
-	"<level|feature...>",
-	`Log level (0-4) or custom features to log. See ${green("LOG OPTIONS")} section`,
-)
-addFullFlagOption(
-	["-L", "--log-features"],
-	"Display which log features are enabled on startup",
-)
-addFullFlagOption(
-	["-c", "--cache-time"],
-	"<ms>",
-	`Set cache time to a value in miliseconds (default=${green(900000)} ms, ${green(15)} mins)`,
-)
-addFullFlagOption(["-C", "--no-cache"], "Do not store any cache")
-addFullFlagOption(["-A", "--no-avatars"], "Do not store avatars")
-addFullFlagOption(
-	["-W", "--no-warnings"],
-	"Do not print any warnings. This includes all warnings during runtime, excluding parsing of command line arguments",
-)
-addFullFlagOption(
-	["-E", "--no-errors"],
-	"Do not output any errors. This includes all runtime errors, excluding incorrect project startup",
-)
-addFullFlagOption(
-	["-t", "--timestamps"],
-	"[format]",
-	`Include timestamps in all logging stuff, and optionaly pass the format how to output timestamp. See ${green("TIMESTAMP FORMAT")} (default=${green('"h:m:s D.M.Y"')})`,
-)
-addFullFlagOption(
-	["-g", "--gen-config"],
-	"[toml|env]",
-	`Generate default config file in the root of progect (for spesific file type, if spesified) (default=${green("toml")})`,
-)
-addFullFlagOption(
-	["-O", "--omit-config"],
-	`Omit the configuration file (do not load any properties from them). It applies to both '${green("config.toml")}' and '${green(".env")}' files (if they exist)`,
-)
-addFullFlagOption(
-	["-w", "--watch"],
-	`Watch the configuration file, and do a restart on change (hierarchy: '${green("config.toml")}' > '${green(".env")}' > ${green("default")}`,
-)
-
 if (process.argv[1].match(/help(.ts)?$/)) {
 	if (process.argv[2] === "-f") {
+		// Running this file directly will not load the entry point to process flags => less CPU usage :)
+
 		var flag = process.argv[3]?.toLowerCase().trim()
 		if (
 			flag === undefined ||
@@ -164,18 +89,19 @@ class FormatedOption {
 }
 
 class CLIOption {
-	private indent = "  " as const
-	private key: FormatedOption
+	/** indentation for all options (leading characters) */
+	private static indent = "  " as const
+	private key = new FormatedOption("")
 	private props: string = ""
 	private descriptionText: string = ""
 	private keyWidth: number
 	private descriptionWidth: number
 	private stdoutWidth: number
+
 	constructor(
 		optionColumnWidth: number = optionsColumnWidth,
 		stdoutWidth: number = terminalWidth,
 	) {
-		this.key = new FormatedOption("")
 		this.keyWidth = optionColumnWidth
 		this.stdoutWidth = stdoutWidth
 		this.descriptionWidth = stdoutWidth - optionColumnWidth
@@ -198,8 +124,8 @@ class CLIOption {
 
 	build() {
 		var propsText = this.props ? ` ${this.props}` : "",
-			fullKey = this.indent + this.key.value.formated + propsText,
-			fullKeyRaw = this.indent + this.key.value.raw + propsText,
+			fullKey = CLIOption.indent + this.key.value.formated + propsText,
+			fullKeyRaw = CLIOption.indent + this.key.value.raw + propsText,
 			fullKeyPadValue = this.keyWidth + 1 - fullKeyRaw.length,
 			fullKeyPad = " ".repeat(fullKeyPadValue < 0 ? 0 : fullKeyPadValue),
 			readyLines = this.wrapText(this.descriptionText).map(
@@ -222,7 +148,7 @@ class CLIOption {
 
 	private wrapText(text: string) {
 		// any word/ansi escape code exept space
-		var words = text.match(/[^ ]+/g)!,
+		var words = text.match(/[^ ]+/g) ?? [text],
 			// raw version without ansi escape codes
 			rawWords = words.map((w) => w.replace(/\u001b\[\d+m/g, "")),
 			lines: string[] = [],
@@ -230,7 +156,7 @@ class CLIOption {
 			currentLineLen = 0
 		for (var i = 0; i < words.length; i++) {
 			if (
-				currentLineLen + rawWords[i].length + 2 >=
+				currentLineLen + rawWords[i].length + 1 >=
 				this.descriptionWidth
 			) {
 				lines.push(currentLine)
@@ -241,7 +167,7 @@ class CLIOption {
 				currentLineLen += rawWords[i].length + (currentLine ? 1 : 0)
 			}
 		}
-		if (currentLine) lines.push(currentLine)
+		if (currentLine || lines.length === 0) lines.push(currentLine)
 		return lines
 	}
 }
@@ -262,7 +188,7 @@ class CLISection<Name extends string> {
 	}
 }
 
-function formatOptions(optionList: Option[]): FormatedOption {
+function formatOptions(optionList: string[]): FormatedOption {
 	return new FormatedOption(
 		`${(optionList.every((e) => e.includes("--")) ? ((optionList[0] = `    ${optionList[0]}`), optionList) : optionList).map(green).join(", ")}`,
 	)
@@ -297,10 +223,37 @@ function createCLISection<Name extends string>(
 	return new CLISection(name, CLIOptions, ps)
 }
 
-function printFlags() {
-	createCLISection("FLAGS", flags, [
-		`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LCAq")}'`,
-	]).print()
+function printFlags(extended = false) {
+	createCLISection(
+		"FLAGS",
+
+		(() => {
+			setupFlagHandlers()
+			return flagObjects.reduce((a, c) => {
+				var parameter = [],
+					value = [],
+					description = ""
+				if (c.short) parameter.push(`-${c.short}`)
+				if (c.parameter) value.push(c.parameter)
+
+				description = extended
+					? c.extendedDescription || c.description
+					: c.description
+
+				parameter.push(`--${c.long}`)
+				value.push(description)
+				a.set(
+					parameter,
+					(value.length === 1 ? value[0] : value) as FlagRest,
+				)
+				return a
+			}, new Map<string[], FlagRest>())
+		})(),
+
+		[
+			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LCAq")}'`,
+		],
+	).print()
 }
 
 function printLogOptions() {
@@ -338,14 +291,16 @@ export default function main(section?: (typeof helpFlags)[number]) {
 		timestamps = false
 
 	!section && console.log(`Usage: ${green("bun start [FLAGS...]")}`)
-	if (!section || section === "flags") flags = true
+	if (section === "flags") flags = true
 	if (section === "log_options") logOptions = true
 	if (section === "sections") sections = true
 	if (section === "timestamp_format") timestamps = true
 	if (section && !helpFlags.includes(section))
 		console.log(error(`Unknown help section: ${green(section)}`))
 
-	flags && printFlags()
+	!section && printFlags()
+
+	flags && printFlags(true)
 	logOptions && printLogOptions()
 	sections && printSections()
 	timestamps && printTimespampOptions()

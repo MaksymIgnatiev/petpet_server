@@ -2,7 +2,7 @@ import fs from "fs"
 import { Hono } from "hono"
 import { defaultPetPetParams, fetchAvatar, generatePetPet } from "./petpet"
 import { logger } from "hono/logger"
-import type { PetPetType, PetPetParams, Hash } from "./types"
+import type { PetPetParams, Hash } from "./types"
 
 import {
 	checkValidRequestParams,
@@ -12,7 +12,6 @@ import {
 	info,
 	isLogfeatureEnabled,
 	log,
-	warning,
 } from "./functions"
 import { getGlobalOption, getServerOption } from "./config"
 import { PetPet } from "./db"
@@ -194,8 +193,7 @@ function restart() {
 		port: getServerOption("port"),
 		hostname: getServerOption("host"),
 	})
-
-	log("info", `Listening on URL: ${green(server.url)}`)
+	log("info", info(`Listening on URL: ${green(server.url)}`))
 }
 
 restart()

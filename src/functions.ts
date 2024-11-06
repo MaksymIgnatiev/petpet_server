@@ -55,7 +55,7 @@ export function customLogTag<S extends string, C extends ANSIRGB>(
 ) {
 	return function (string: any) {
 		return (
-			`${color ? `\x1b[${color}m` : ""}[${tag}]${color ? "\x1b[0m" : ""} ` +
+			`${color ? `\x1b[${color}m` : ""}${getGlobalOption("timestamps") ? `[${formatDate(new Date(), getGlobalOption("timestampFormat"))}]` : ""}[${tag}]${color ? "\x1b[0m" : ""} ` +
 			string
 		)
 	}
@@ -148,27 +148,38 @@ function formatDate<F extends string>(date: Date, format: F) {
 	return (
 		format
 			// milliseconds
-			.replace(/S/g, String(date.getMilliseconds()).padStart(3, "0"))
+			.replace(
+				/(?<!\\)S/g,
+				String(date.getMilliseconds()).padStart(3, "0"),
+			)
 			// seconds
-			.replace(/s/g, String(date.getSeconds()).padStart(2, "0"))
+			.replace(/(?<!\\)s/g, String(date.getSeconds()).padStart(2, "0"))
 			// Minutes
-			.replace(/m/g, String(date.getMinutes()).padStart(2, "0"))
+			.replace(/(?<!\\)m/g, String(date.getMinutes()).padStart(2, "0"))
 			// 24-hour format
-			.replace(/h/g, String(date.getHours()).padStart(2, "0"))
+			.replace(/(?<!\\)h/g, String(date.getHours()).padStart(2, "0"))
 			// 12-hour format
-			.replace(/H/g, String(date.getHours() % 12 || 12).padStart(2, "0"))
+			.replace(
+				/(?<!\\)H/g,
+				String(date.getHours() % 12 || 12).padStart(2, "0"),
+			)
 			// Day of week (3-letter)
-			.replace(/d/g, date.toLocaleString("en", { weekday: "short" }))
+			.replace(
+				/(?<!\\)d/g,
+				date.toLocaleString("en", { weekday: "short" }),
+			)
 			// Day of month
-			.replace(/D/g, String(date.getDate()).padStart(2, "0"))
+			.replace(/(?<!\\)D/g, String(date.getDate()).padStart(2, "0"))
 			// Month (number)
-			.replace(/M/g, String(date.getMonth() + 1).padStart(2, "0"))
+			.replace(/(?<!\\)M/g, String(date.getMonth() + 1).padStart(2, "0"))
 			// Month (3-letter name)
-			.replace(/N/g, date.toLocaleString("en", { month: "short" }))
+			.replace(/(?<!\\)N/g, date.toLocaleString("en", { month: "short" }))
 			// Year
-			.replace(/Y/g, String(date.getFullYear()))
+			.replace(/(?<!\\)Y/g, String(date.getFullYear()))
 			// AM/PM indicator
-			.replace(/P/g, date.getHours() >= 12 ? "PM" : "AM")
+			.replace(/(?<!\\)P/g, date.getHours() >= 12 ? "PM" : "AM")
+			// Removing all leading `\` for escaping characters
+			.replace(/\\(?=\S)/g, "")
 	)
 }
 
@@ -234,13 +245,13 @@ export function checkValidRequestParams(
 		return badRequest(
 			"Invalid user id. Usage: '{Integer}'. Ex: '117378255429959680'",
 		)
-	if (size && !/^\d?\d?\d$/.test(size))
+	if (size && !/^\d+$/.test(size))
 		return badRequest(
 			"Invalid size parameter. Usage: '{Integer}'. Ex: '20', '90'",
 		)
-	if (size && /^\d?\d?\d$/.test(size) && +size < 1)
+	if (size && /^\d+$/.test(size) && +size < 1)
 		return badRequest(
-			"Size parameter out of range. Use only positive values",
+			"Size parameter out of range. Use only positive values [1, +Infinity)",
 		)
 	if (shift && !/^-?\d+x-?\d+$/.test(shift))
 		return badRequest(
@@ -278,14 +289,14 @@ export function checkValidRequestParams(
 		)
 	if (fps && /^\d?\d$/.test(fps) && +fps < 1)
 		return badRequest(
-			"Invalid fps parameter value. Use only integers in range [1, 50) (recomended). Please take notice about gif frame rate compatiability. Read 'https://www.fileformat.info/format/gif/egff.htm' for more information",
+			"Invalid fps parameter value. Use only integers in range [1, 50] (recomended). Please take notice about gif frame rate compatiability. Read 'https://www.fileformat.info/format/gif/egff.htm' for more information",
 		)
-	if (squeeze && !/^\d+$/.test(squeeze))
+	if (squeeze && !/^-?\d+$/.test(squeeze))
 		return badRequest(
 			"Invalid squeeze parameter. Usage: '{Integer}'. Ex: '10', '-20'",
 		)
 	if (squeeze && /^\d+$/.test(squeeze) && isNaN(+squeeze))
-		return badRequest("Invalid fps parameter value. Use only integers")
+		return badRequest("Invalid squeeze parameter value. Use only integers")
 }
 
 export function updateObject<T extends Record<any, any>>(
@@ -304,11 +315,6 @@ export function decompress(buffer: Buffer) {
 	return zlib.brotliDecompressSync(new Uint8Array(buffer))
 }
 
-export function errorAndExit(...args: any[]) {
-	console.error(...args)
-	process.exit()
-}
-
 export function isString(obj: unknown): obj is string {
 	return typeof obj === "string"
 }
@@ -319,7 +325,7 @@ export function isNumber(obj: unknown): obj is number {
 export function isStringNumber(obj: unknown): obj is `${number}` {
 	return (
 		typeof obj === "string" &&
-		/^\d+$/.test(obj) &&
+		/^-?\d+$/.test(obj) &&
 		!isNaN(+obj) &&
 		Number.isFinite(+obj)
 	)

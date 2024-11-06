@@ -7,7 +7,7 @@ if (process.argv[1].match(/petpet(.ts)?$/))
 		process.exit()
 
 import type { PetPetParams } from "./types"
-import path, { resolve } from "path"
+import path from "path"
 import sharp from "sharp"
 import { GifCodec, GifFrame, GifUtil, BitmapImage } from "gifwrap"
 import { error, green } from "./functions"
@@ -41,7 +41,7 @@ export var defaultPetPetParams: {
 
 export async function generatePetPet(
 	avatar: Buffer,
-	params: PetPetParams = {},
+	params: PetPetParams = defaultPetPetParams,
 ) {
 	var {
 			shiftX = defaultPetPetParams.shiftX,

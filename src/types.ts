@@ -229,35 +229,57 @@ export type ServerOptions<
 // ----- Flag -----
 
 export type FlagValue = "none" | "optional" | "required"
+export type FlagValueArray = ("required" | "optional")[]
+export type FlagValueUnion = FlagValue | FlagValueArray
 
-export type FlagHandlerParam<T extends FlagValue> = T extends "none"
-	? []
-	: T extends "optional"
-		? [value?: string]
-		: [value: string]
+export type FlagParameterType = {
+	required: `<${string}>`
+	optional: `[${string}]`
+}
 
-export type FlagParameter<T extends FlagValue> = T extends "none"
-	? never
-	: T extends "optional"
-		? `[${string}]`
-		: `<${string}>`
+type FlagHandlerParam<T extends FlagValueUnion> = T extends FlagValue
+	? T extends "required"
+		? [value: string]
+		: T extends "optional"
+			? [value?: string]
+			: []
+	: T extends FlagValueArray
+		? {
+				[K in keyof T]: T[K] extends "required"
+					? string
+					: T[K] extends "optional"
+						? string | undefined
+						: string
+			}
+		: []
 
-export type Flag<T extends FlagValue> = T extends "none"
-	? {
-			short?: string
-			long: string
-			value: T
-			description: string
-			handler: (...args: FlagHandlerParam<T>) => void
-		}
+type FlagParameter<T extends FlagValueUnion> = T extends FlagValue
+	? T extends "required"
+		? FlagParameterType["required"]
+		: T extends "optional"
+			? FlagParameterType["optional"]
+			: T extends "none"
+				? ""
+				: string
 	: {
-			short?: string
-			long: string
-			value: T
-			parameter: FlagParameter<T>
-			description: string
-			handler: (...args: FlagHandlerParam<T>) => void
+			[K in keyof T]: T[K] extends "required"
+				? FlagParameterType["required"]
+				: T[K] extends "optional"
+					? FlagParameterType["optional"]
+					:
+							| FlagParameterType["required"]
+							| FlagParameterType["optional"]
 		}
+
+export type Flag<T extends FlagValueUnion> = {
+	short?: string
+	long: string
+	value: T
+	parameter: FlagParameter<T>
+	description: string
+	extendedDescription: string
+	handler: (...args: FlagHandlerParam<T>) => void
+}
 
 type FlagShortRequireBase = {
 	/** Log level (0-4 | features...) */
