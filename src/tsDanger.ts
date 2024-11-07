@@ -1,12 +1,6 @@
-import { error, green } from "./functions"
+import { error, fileNotForRunning, green } from "./functions"
 
-if (process.argv[1].match(/tsDanger(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/tsDanger.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
 export function setLogOption(option: LogOption) {
 	if (typeof option === "number" && /^\d$/.test(option + "")) {

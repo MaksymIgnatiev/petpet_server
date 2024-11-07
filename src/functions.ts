@@ -1,20 +1,12 @@
-if (process.argv[1].match(/functions(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/functions.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
 import type { Context } from "hono"
 import fs from "node:fs"
+import { join } from "path"
 import type {
 	AllGlobalConfigOptions,
+	AlwaysResolvingPromise,
 	ChechValidParamsParam,
-	FilteredBooleanConfigProps,
-	FilteredNumberConfigProps,
-	FilteredObjectConfigProps,
-	FilteredStringConfigProps,
 	FilterObjectProps,
 	GlobalOptionPropPriorityAll,
 	LogOption,
@@ -22,32 +14,63 @@ import type {
 	LogOptions,
 	LogOptionShort,
 	LogStringOne,
-	TOMLConfig,
 } from "./types"
 import {
-	booleanOptions,
 	getGlobalOption,
 	getLogOption,
 	normalizePriority,
 	getPriorityForOption,
-	numberOptions,
-	objectOptions,
 	priorityLevel,
-	setGlobalOption,
-	stringOptions,
 	setState,
+	ROOT_PATH,
 } from "./config"
 import zlib from "zlib"
 import { TOML } from "bun"
+import { parseEnv, parseToml } from "./parseConfigFile"
+import main, { helpFlags } from "./help"
 
 var lightblue = [0, 170, 210] as const
-type Color = [number, number, number]
 
 type ANSIRGB<
 	R extends number = number,
 	G extends number = number,
 	B extends number = number,
 > = `38;2;${R};${G};${B}`
+
+export function fileNotForRunning() {
+	import("./config").then(() => {
+		var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)
+		if (file && file[0] !== "help.ts" && file[0] !== "index.ts") {
+			{
+				console.log(
+					error(
+						`File ${green(`@/src/${file[0]}`)} is a library file and is not intended to be run directly`,
+					),
+				)
+				process.exit()
+			}
+		} else if (file && file[0] === "help.ts") {
+			if (process.argv[2] === "-f") {
+				// Running this file directly will not load the entry point to process flags => less CPU usage :)
+
+				var flag = process.argv[3]?.toLowerCase().trim()
+				if (
+					flag === undefined ||
+					helpFlags.includes(flag as (typeof helpFlags)[number])
+				)
+					main(flag as (typeof helpFlags)[number])
+				else console.log(error(`Unknown help section: ${green(flag)}`))
+			} else {
+				console.log(
+					warning(
+						`File ${green("@/src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
+					),
+				)
+				process.exit()
+			}
+		}
+	})
+}
 
 export function customLogTag<S extends string, C extends ANSIRGB>(
 	tag: S,
@@ -343,7 +366,7 @@ export function checkForTrueString(obj: `${boolean}`): obj is "true" {
 
 export function getConfigType() {
 	var type: "config.toml" | ".env" | undefined,
-		files = fs.readdirSync("../")
+		files = fs.readdirSync(ROOT_PATH)
 	if (files.includes("config.toml")) type = "config.toml"
 	else if (files.includes(".env")) type = ".env"
 	else type = undefined
@@ -351,116 +374,36 @@ export function getConfigType() {
 	return type
 }
 
-export function getConfig<R extends boolean = false>(reload?: R) {
-	reload && setState("configuring")
+export function getConfig<R extends boolean = false>(
+	reload?: R,
+): AlwaysResolvingPromise<boolean> {
+	setState("configuring")
 	var config = getConfigType()
-	if (config === "config.toml") {
-		Bun.file(`./../${config}`)
-			.text()
-			.then(TOML.parse)
-			.then(parseToml)
-			.then(() => setState("ready"))
-			.catch((e) => {
-				console.error(
-					"Error while parsing toml configuration file:\n",
-					e,
-				)
-				process.exit(1)
-			})
-	} else if (config === ".env") {
-		Bun.file(`./../${config}`)
-			.text()
-			.then(parseEnv)
-			.then(() => setState("ready"))
-	}
-}
-
-function configPropWrongType(prop: string, type: string) {
-	log(
-		"error",
-		error(
-			`Configuration property: '${prop}' has wrong type. Expected: '${type}'`,
-		),
-	)
-}
-
-function parseEnv(obj: string) {}
-
-function parseToml(obj: Record<string, any>) {
-	for (var key of Object.keys(obj) as unknown as keyof TOMLConfig) {
-		if (numberOptions.includes(key as (typeof numberOptions)[number])) {
-			checkAndSetNumberGlobalProp(
-				key as (typeof numberOptions)[number],
-				obj[key],
-			)
-		} else if (
-			booleanOptions.includes(key as (typeof booleanOptions)[number])
-		) {
-			checkAndSetBooleanGlobalProp(
-				key as (typeof booleanOptions)[number],
-				obj[key],
-			)
-		} else if (
-			stringOptions.includes(key as (typeof stringOptions)[number])
-		) {
-			checkAndSetStringGlobalProp(
-				key as (typeof stringOptions)[number],
-				obj[key],
-			)
-		} else if (
-			objectOptions.includes(key as (typeof objectOptions)[number])
-		) {
-			checkAndSetObjectGlobalProp(
-				key as (typeof objectOptions)[number],
-				obj[key],
-			)
-		} else {
-			log(
-				"warning",
-				warning(
-					`Unknown key in 'config.toml' configuration file: '${key}'`,
-				),
-			)
-		}
-	}
+	return new Promise<boolean>((resolve) => {
+		if (config === "config.toml") {
+			Bun.file(join(ROOT_PATH, config))
+				.text()
+				.then(TOML.parse)
+				.then(parseToml)
+				.then(() => {
+					setState("ready")
+					resolve(true)
+				})
+				.catch((e) => {
+					console.error(
+						"Error while parsing toml configuration file:\n",
+						e,
+					)
+					resolve(false)
+				})
+		} else if (config === ".env") {
+			parseEnv()
+			setState("ready")
+			resolve(true)
+		} else setState("ready"), resolve(true)
+	})
 }
 
 export function sameType(value1: unknown, value2: unknown) {
 	return typeof value1 === typeof value2
-}
-
-function checkAndSetStringGlobalProp<
-	K extends keyof FilteredStringConfigProps,
-	V extends FilteredStringConfigProps[K],
->(key: K, value: V) {
-	if (hasNullable(key, value)) return
-	if (isString(value)) setGlobalOption(key, value as any, 1)
-}
-
-function checkAndSetNumberGlobalProp<
-	K extends keyof FilteredNumberConfigProps,
-	V extends FilteredNumberConfigProps[K] | `${FilteredNumberConfigProps[K]}`,
->(key: K, value: V) {
-	if (isStringNumber(value)) setGlobalOption(key, +value, 1)
-	else if (isNumber(value)) setGlobalOption(key, value, 1)
-}
-
-function checkAndSetObjectGlobalProp<
-	K extends keyof FilteredObjectConfigProps,
-	V extends FilteredObjectConfigProps[K],
->(key: K, value: V) {
-	if (isStringBoolean(value))
-		setGlobalOption("cache", checkForTrueString(value), 1)
-	else if (isBoolean(value)) setGlobalOption("cache", value, 1)
-}
-
-function checkAndSetBooleanGlobalProp<
-	K extends keyof FilteredBooleanConfigProps,
-	V extends
-		| FilteredBooleanConfigProps[K]
-		| `${FilteredBooleanConfigProps[K]}`,
->(key: K, value: V) {
-	if (isStringBoolean(value))
-		setGlobalOption(key, checkForTrueString(value), 1)
-	else if (isBoolean(value)) setGlobalOption(key, value, 1)
 }

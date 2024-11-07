@@ -1,13 +1,18 @@
-if (process.argv[1].match(/flags(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/flags.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
-import { error, green, isStringNumber } from "./functions"
-import { getVersion, setGlobalOption, setState } from "./config"
+import {
+	error,
+	fileNotForRunning,
+	getConfig,
+	green,
+	isStringNumber,
+} from "./functions"
+import {
+	getGlobalOption,
+	getVersion,
+	setGlobalOption,
+	setState,
+} from "./config"
 import printHelp, { helpFlags } from "./help"
 import type { Flag, FlagValueArray, FlagValueUnion } from "./types"
 

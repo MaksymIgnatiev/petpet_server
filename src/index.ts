@@ -17,6 +17,7 @@ import { getGlobalOption, getServerOption } from "./config"
 import { PetPet } from "./db"
 import { processFlags } from "./flags"
 import type { Server } from "bun"
+import { genConfig } from "./genConfig"
 
 var args = process.argv.slice(2),
 	app = new Hono(),
@@ -180,6 +181,10 @@ function setupWatch() {
 	return watcher
 }
 
+function listening() {
+	log("info", info(`Listening on URL: ${green(server.url)}`))
+}
+
 function restart() {
 	if (intervalID) clearInterval(intervalID)
 	processFlags(args)
@@ -193,7 +198,10 @@ function restart() {
 		port: getServerOption("port"),
 		hostname: getServerOption("host"),
 	})
-	log("info", info(`Listening on URL: ${green(server.url)}`))
+	if (getGlobalOption("useConfig")) getConfig().then(listening)
+	else listening()
 }
+
+genConfig("env")
 
 restart()

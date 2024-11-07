@@ -1,13 +1,7 @@
-if (process.argv[1].match(/types(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/types.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
 import type { Avatar, PetPet } from "./db"
-import { error, green } from "./functions"
+import { error, fileNotForRunning, green } from "./functions"
 import type { helpFlags } from "./help"
 
 // ---- Utility types ----
@@ -86,7 +80,7 @@ export type GlobalOptionPropPriorityLevel = 0 | 1 | 2
 export type GlobalOptionPropPriorityAll =
 	| GlobalOptionPropPriorityLevel
 	| GlobalOptionPropPriorityString
-export type GlobalOptionProp<T> = {
+export type GlobalOptionProp<T = any> = {
 	value: T
 	source: GlobalOptionPropPriorityString
 }
@@ -168,14 +162,14 @@ type AdditionalGlobalOptions = {
 	useConfig: boolean
 }
 
-export type AllGlobalConfigOptions = BaseConfigOptions & AdditionalGlobalOptions
+type AllGlobalConfigOptionsBase = BaseConfigOptions & AdditionalGlobalOptions
+export type AllGlobalConfigOptions = Readonly<AllGlobalConfigOptionsBase>
 
 /** Options for global behaviour and settings */
 export type GlobalOptions = {
 	/** Version of the project */
 	readonly version: string
 	/** State of the configuration
-	 * `"original"` - default values on start
 	 * `"configuring"` - in process of configuring all runtime options
 	 * `"ready"` - when configuration is ready for usage (not in configuration phase)
 	 */

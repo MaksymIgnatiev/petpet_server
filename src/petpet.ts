@@ -1,16 +1,10 @@
-if (process.argv[1].match(/petpet(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/petpet.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
 import type { PetPetParams } from "./types"
 import path from "path"
 import sharp from "sharp"
 import { GifCodec, GifFrame, GifUtil, BitmapImage } from "gifwrap"
-import { error, green } from "./functions"
+import { error, fileNotForRunning, green } from "./functions"
 
 var handGIFBuffer = Buffer.from(
 		await Bun.file(

@@ -59,7 +59,7 @@ class Config implements GlobalOptions {
 	}
 }
 
-var globalOptionsDefault: AllGlobalConfigOptions = {
+export var globalOptionsDefault: AllGlobalConfigOptions = {
 		cacheTime: 15 * 60_000, // 15 minutes, in `ms`
 		cacheCheckTime: 60_000, // 1 minute, in `ms`
 		cache: true,
@@ -87,22 +87,16 @@ var globalOptionsDefault: AllGlobalConfigOptions = {
 			host: "localhost",
 		},
 	},
-	globalOptions: GlobalOptions = new Config()
+	// Absolute path to the root of the project
+	ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), "../")
 
-if (process.argv[1].match(/config(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/config.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+var globalOptions: GlobalOptions = new Config()
 
-import {
-	hasNullable,
-	checkPermisionForGlobalOption,
-	error,
-	green,
-} from "./functions"
+fileNotForRunning()
+
+import { join, dirname } from "path"
+import { fileURLToPath } from "url"
+import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
 import type {
 	AllGlobalConfigOptions,
 	FilteredBooleanConfigProps,
@@ -117,8 +111,6 @@ import type {
 	GlobalOptions,
 	GlobalOptionsValues,
 	IndexOf,
-	LogOptions,
-	ServerOptions,
 	UnionToTuple,
 	Values,
 } from "./types"
@@ -185,7 +177,7 @@ export function setState<S extends GlobalOptions["state"]>(state: S) {
 	} else {
 		// this will only work with type assertion. Don't play with it :)
 		throw new Error(
-			`State for global configuration does not satisfies the type: ${stateList.map((e) => `'${e}'`).join(" | ")}. State '${state}' was provided`,
+			`State for global configuration does not satisfies the type: ${stateList.map((e) => `'${green(e)}'`).join(" | ")}. State '${state}' was provided`,
 		)
 	}
 }
@@ -195,15 +187,16 @@ export function setGlobalOption<
 	V extends GlobalOptionsValues[K],
 	P extends GlobalOptionPropPriorityAll,
 >(option: K, value: V, priority: P) {
-	var success = true
-	if (globalOptions.state !== "configuring") success = false
-	else if (hasNullable(option, value, priority)) success = false
-	else if (!checkPermisionForGlobalOption(option, priority)) success = false
-	else if (typeof globalOptions[option].value !== typeof value)
-		success = false
-	else {
+	var success = false
+	if (
+		globalOptions.state === "configuring" &&
+		!hasNullable(option, value, priority) &&
+		comparePriorities(globalOptions[option].source, priority) < 0 &&
+		sameType(globalOptions[option].value, value)
+	) {
 		globalOptions[option].value = value
 		globalOptions[option].source = normalizePriority(priority, "string")
+		success = true
 	}
 	return success
 }
@@ -246,7 +239,7 @@ function resetGlobalOptions(
 
 type FilteredObjectProperties = FilterObjectProps<
 	GlobalOptions,
-	Record<string, GlobalOptionProp<any>>
+	Record<string, GlobalOptionProp>
 >
 type CompareTable = {
 	0: { 0: 0; 1: -1; 2: -1 }
@@ -259,15 +252,15 @@ type ComparePriorities<
 	P2 extends GlobalOptionPropPriorityAll,
 > = CompareTable[GetPriotiry<P1, "number">][GetPriotiry<P2, "number">]
 
-/** Compares 2 priorities. `First > Second = 1`, `First < Second = -1`, `First === Second = 0`
+/** Compares 2 priorities.  `First < Second = -1`, `First === Second = 0`,  `First > Second = 1`
  * @returns Comparison result `-1 | 0 | 1`
  * */
 export function comparePriorities<
 	P1 extends GlobalOptionPropPriorityAll,
 	P2 extends GlobalOptionPropPriorityAll,
->(priority1: P1, priority2: P2): ComparePriorities<P1, P2> {
-	var p1: GlobalOptionPropPriorityLevel = normalizePriority(priority1),
-		p2: GlobalOptionPropPriorityLevel = normalizePriority(priority2)
+>(first: P1, second: P2): ComparePriorities<P1, P2> {
+	var p1: GlobalOptionPropPriorityLevel = normalizePriority(first),
+		p2: GlobalOptionPropPriorityLevel = normalizePriority(second)
 	return (
 		p1 === p2 ? 0 : p1 < p2 ? -1 : p1 > p2 ? 1 : 0
 	) as ComparePriorities<P1, P2>
@@ -362,7 +355,7 @@ function createGlobalOptionObjectSetter<
 	/** Sets the global object property, and returns a boolean value representing status of the process (true=`success`, false=`failure`) */
 	return function <
 		K extends keyof FilteredObjectProperties[O],
-		V extends FilteredObjectProperties[O][K] extends GlobalOptionProp<any>
+		V extends FilteredObjectProperties[O][K] extends GlobalOptionProp
 			? FilteredObjectProperties[O][K]["value"]
 			: never,
 		P extends GlobalOptionPropPriorityAll,
@@ -371,7 +364,7 @@ function createGlobalOptionObjectSetter<
 		if (
 			!hasNullable(option, value, priority) &&
 			Object.hasOwn(globalOptions[object], option) &&
-			typeof globalOptions[object][option] === typeof value
+			sameType(globalOptions[object][option], value)
 		) {
 			var optionObj = globalOptions[object][option] as GlobalOptionProp<V>
 
@@ -388,14 +381,45 @@ function createGlobalOptionObjectGetter<
 >(object: O) {
 	return function <P extends keyof FilteredObjectProperties[O]>(
 		option: P,
-	): GlobalOptions[O][P] extends GlobalOptionProp<any>
+	): GlobalOptions[O][P] extends GlobalOptionProp
 		? GlobalOptions[O][P]["value"]
 		: never {
-		return (globalOptions[object][option] as GlobalOptionProp<any>).value
+		return (globalOptions[object][option] as GlobalOptionProp).value
 	}
 }
 
-export var setServerOption = createGlobalOptionObjectSetter("server")
-export var getServerOption = createGlobalOptionObjectGetter("server")
-export var setLogOption = createGlobalOptionObjectSetter("logOptions")
-export var getLogOption = createGlobalOptionObjectGetter("logOptions")
+export function setGlobalObjectOption<
+	OBJ extends keyof FilteredObjectProperties,
+	K extends keyof FilteredObjectProperties[OBJ],
+	V extends FilteredObjectProperties[OBJ][K] extends GlobalOptionProp
+		? FilteredObjectProperties[OBJ][K]["value"]
+		: never,
+	P extends GlobalOptionPropPriorityAll,
+>(object: OBJ, key: K, value: V, priority: P) {
+	var success = false
+	if (
+		!hasNullable(object, key, value, priority) &&
+		Object.hasOwn(globalOptions, object) &&
+		typeof globalOptions[object] === "object" &&
+		Object.hasOwn(globalOptions[object], key) &&
+		sameType(
+			(globalOptions[object][key] as GlobalOptionProp<V>).value,
+			value,
+		) &&
+		comparePriorities(
+			(globalOptions[object][key] as GlobalOptionProp<V>).source,
+			priority,
+		) < 0
+	) {
+		var obj = globalOptions[object][key] as GlobalOptionProp<V>
+		obj.value = value
+		obj.source = normalizePriority(priority, "string")
+		success = true
+	}
+	return success
+}
+
+export var setServerOption = createGlobalOptionObjectSetter("server"),
+	getServerOption = createGlobalOptionObjectGetter("server"),
+	setLogOption = createGlobalOptionObjectSetter("logOptions"),
+	getLogOption = createGlobalOptionObjectGetter("logOptions")

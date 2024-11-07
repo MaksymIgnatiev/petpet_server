@@ -1,19 +1,13 @@
-if (process.argv[1].match(/db(.ts)?$/))
-	console.log(
-		error(
-			`File ${green("@/src/db.ts")} is a library file and is not intended to be run directly`,
-		),
-	),
-		process.exit()
+fileNotForRunning()
 
 import fs from "fs"
 import { join } from "path"
-import { getGlobalOption } from "./config"
+import { getGlobalOption, ROOT_PATH } from "./config"
 import {
 	compress,
 	decompress,
 	error,
-	green,
+	fileNotForRunning,
 	log,
 	updateObject,
 } from "./functions"
@@ -34,7 +28,7 @@ var petpets: PetPets = new Map(),
 	avatars: Avatars = new Map(),
 	petpetQueue: PetPetQueue = new Map(),
 	avatarQueue: AvatarQueue = new Map(),
-	cacheDir = join(__dirname, "../cache/") as `${string}/cache`,
+	cacheDir = join(ROOT_PATH, "../cache/") as `${string}/cache`,
 	gifCacheDir = join(cacheDir, "gif") as `${string}/cache/gif`,
 	avatarCacheDir = join(cacheDir, "avatar") as `${string}/cache/avatar`
 

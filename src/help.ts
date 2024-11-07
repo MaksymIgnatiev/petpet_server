@@ -41,31 +41,14 @@ var terminalWidth = process.stdout.columns || 80,
 		["sections", "Show this message"],
 	])
 import { flagObjects, setupFlagHandlers } from "./flags"
-import { error, green, warning } from "./functions"
+import { error, fileNotForRunning, green, warning } from "./functions"
 type FlagRest = [string | string[], string] | string
 type Section<
 	T extends string | string[] = string,
 	V extends FlagRest = FlagRest,
 > = Map<T, V>
 
-if (process.argv[1].match(/help(.ts)?$/)) {
-	if (process.argv[2] === "-f") {
-		// Running this file directly will not load the entry point to process flags => less CPU usage :)
-
-		var flag = process.argv[3]?.toLowerCase().trim()
-		if (
-			flag === undefined ||
-			helpFlags.includes(flag as (typeof helpFlags)[number])
-		)
-			main(flag as (typeof helpFlags)[number])
-		else console.log(error(`Unknown help section: ${green(flag)}`))
-	} else
-		console.log(
-			warning(
-				`File ${green("@/src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
-			),
-		)
-}
+fileNotForRunning()
 
 class FormatedOption {
 	#formated: string
