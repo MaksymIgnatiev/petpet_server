@@ -1,20 +1,10 @@
 fileNotForRunning()
 
-import {
-	error,
-	fileNotForRunning,
-	getConfig,
-	green,
-	isStringNumber,
-} from "./functions"
-import {
-	getGlobalOption,
-	getVersion,
-	setGlobalOption,
-	setState,
-} from "./config"
+import { error, fileNotForRunning, green, isStringNumber } from "./functions"
+import { getVersion, setGlobalOption, setState } from "./config"
 import printHelp, { helpFlags } from "./help"
 import type { Flag, FlagValueArray, FlagValueUnion } from "./types"
+import { genConfig } from "./genConfig"
 
 var flagRegex = /^-([a-zA-Z]|-[a-z\-]+)$/,
 	readHelpPage =
@@ -123,7 +113,7 @@ export function setupFlagHandlers() {
 		description: "Run the server without any output",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("quiet", true, 1)
+			setGlobalOption("quiet", true, 2)
 		},
 	})
 
@@ -147,7 +137,7 @@ export function setupFlagHandlers() {
 		description: "Display which log features are enabled on startup",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("logFeatures", true, 1)
+			setGlobalOption("logFeatures", true, 2)
 		},
 	})
 
@@ -159,7 +149,7 @@ export function setupFlagHandlers() {
 		description: `Set cache time to a value in miliseconds (default=${green(900000)} ms, ${green(15)} mins)`,
 		extendedDescription: "",
 		handler(value) {
-			if (isStringNumber(value)) setGlobalOption("cacheTime", +value, 1)
+			if (isStringNumber(value)) setGlobalOption("cacheTime", +value, 2)
 			else
 				errorLog(
 					`Flag '${green("c")}' accepted a non-numeric parameter`,
@@ -188,7 +178,7 @@ export function setupFlagHandlers() {
 		description: "Do not store any cache",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("cache", false, 1)
+			setGlobalOption("cache", false, 2)
 		},
 	})
 
@@ -200,7 +190,7 @@ export function setupFlagHandlers() {
 		description: "Do not store avatars",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("avatars", false, 1)
+			setGlobalOption("avatars", false, 2)
 		},
 	})
 
@@ -213,7 +203,7 @@ export function setupFlagHandlers() {
 			"Do not output any warnings. This includes all warnings during runtime, excluding parsing of command line arguments",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("warnings", false, 1)
+			setGlobalOption("warnings", false, 2)
 		},
 	})
 
@@ -226,7 +216,7 @@ export function setupFlagHandlers() {
 			"Do not output any errors. This includes all runtime errors, excluding incorrect project startup",
 		extendedDescription: "",
 		handler() {
-			setGlobalOption("errors", false, 1)
+			setGlobalOption("errors", false, 2)
 		},
 	})
 
@@ -238,9 +228,9 @@ export function setupFlagHandlers() {
 		description: `Include timestamps in all logging stuff, and optionaly pass the format how to output timestamp. See ${green("TIMESTAMP FORMAT")} (default=${green('"h:m:s D.M.Y"')})`,
 		extendedDescription: "",
 		handler(value) {
-			setGlobalOption("timestamps", true, 1)
+			setGlobalOption("timestamps", true, 2)
 			if (value) {
-				setGlobalOption("timestampFormat", value, 1)
+				setGlobalOption("timestampFormat", value, 2)
 			}
 		},
 	})
@@ -255,10 +245,12 @@ export function setupFlagHandlers() {
 		handler(value) {
 			if (value) {
 				if (value === "toml") {
+					genConfig(value)
 					console.log(
 						`Generated configuration file for type: '${green("toml")}'`,
 					)
 				} else if (value === "env") {
+					genConfig(value)
 					console.log(
 						`Generated configuration file for type: '${green("env")}'`,
 					)
@@ -270,11 +262,24 @@ export function setupFlagHandlers() {
 					)
 				}
 			} else {
+				genConfig("toml")
 				console.log(
 					`Generated configuration file for type: '${green("toml")}' (default)`,
 				)
 			}
 			exit = true
+		},
+	})
+
+	addFlag.empty({
+		short: "O",
+		long: "omit-config",
+		value: "none",
+		parameter: "",
+		description: "Omit the configuration file",
+		extendedDescription: "",
+		handler() {
+			setGlobalOption("useConfig", false, 2)
 		},
 	})
 
@@ -299,32 +304,6 @@ export function setupFlagHandlers() {
 		extendedDescription: "",
 		handler(value) {
 			errorLog(`Flag -H, --host is not implemented. Value is: '${value}'`)
-		},
-	})
-
-	// test flag
-	addFlag.multipleParams({
-		short: "Z",
-		long: "test",
-		value: ["required", "optional"] as const,
-		parameter: ["<required>", "[h]"],
-		description: "",
-		extendedDescription: "",
-		handler(...args) {
-			console.log({ args })
-		},
-	})
-
-	// test flag
-	addFlag.multipleParams({
-		short: "X",
-		long: "kkk",
-		value: ["required", "optional"] as const,
-		parameter: ["<required>", "[h]"],
-		description: "a",
-		extendedDescription: "",
-		handler(...args) {
-			console.log(`args for flag 'X':`, { args })
 		},
 	})
 }

@@ -5,13 +5,53 @@ import {
 	setGlobalObjectOption,
 	setGlobalOption,
 } from "./config"
-import { fileNotForRunning, green, log, sameType, warning } from "./functions"
+import {
+	fileNotForRunning,
+	green,
+	isStringNumber,
+	log,
+	sameType,
+	warning,
+} from "./functions"
 import { envPrefix } from "./genConfig"
-import type { FilteredObjectConfigProps, Values } from "./types"
+import type {
+	AllGlobalConfigOptions,
+	BaseConfigOptions,
+	FilteredObjectConfigProps,
+	Values,
+} from "./types"
+
+function warningLog(text: string) {
+	log("warning", warning(text))
+}
+
 export function parseEnv() {
-	for (var [key, value] of Object.entries(process.env)) {
-		if (key.startsWith(envPrefix)) {
-			console.log({ key, value })
+	for (var [keyRaw, valueRaw] of Object.entries(process.env)) {
+		if (keyRaw.startsWith(envPrefix)) {
+			keyRaw = keyRaw.replace(envPrefix, "")
+			var key = keyRaw.match(
+					/[a-zA-Z]/,
+				)![0] as keyof AllGlobalConfigOptions,
+				value: string | number | boolean
+			if (
+				Object.hasOwn(globalOptionsDefault, key) &&
+				key !== "useConfig"
+			) {
+				var obj = globalOptionsDefault[key]
+				if (typeof obj === "object" && !Array.isArray(obj)) {
+					var typeofObject = typeof obj
+					if (typeofObject === "number") {
+						if (isStringNumber(valueRaw)) {
+						} else
+							warningLog(
+								`Option type missmatch in '.env' configuration file. Option '${green(keyRaw)}' should have type '${green(typeofObject)}', but it's not a number`,
+							)
+					} else if (typeofObject === "boolean") {
+					} else if (typeofObject === "string") {
+					}
+				} else {
+				}
+			}
 		}
 	}
 }
@@ -19,7 +59,7 @@ export function parseEnv() {
 export function parseToml(obj: Record<string, any>) {
 	for (var keyRaw of Object.keys(obj)) {
 		var key = keyRaw as keyof typeof globalOptionsDefault
-		if (globalOptionsDefault[key] !== undefined) {
+		if (globalOptionsDefault[key] !== undefined && key !== "useConfig") {
 			var prop = obj[key]
 			if (sameType(globalOptionsDefault[key], prop)) {
 				if (
@@ -35,7 +75,10 @@ export function parseToml(obj: Record<string, any>) {
 							GODO = globalOptionsDefault[
 								key
 							] as unknown as FilteredObjectConfigProps
-						if (sameType(GODO[propKey], prop[propKey])) {
+						if (
+							sameType(GODO[propKey], prop[propKey]) &&
+							Object.hasOwn(GODO, propKey)
+						) {
 							setGlobalObjectOption(
 								key as keyof FilteredObjectConfigProps,
 								prop as keyof Values<FilteredObjectConfigProps>,
@@ -44,28 +87,23 @@ export function parseToml(obj: Record<string, any>) {
 								>,
 								1,
 							)
-						} else
-							log(
-								"warning",
-								warning(
-									`Option type missmatch in toml configuration file. Property '${green(propKey)}' on object '${green(GODO)}' should have type '${green(typeof GODO[propKey])}', found: '${green(typeof prop[propKey])}'`,
-								),
+						} else if (!Object.hasOwn(GODO, propKey))
+							warningLog(
+								`Unknown property key in 'config.toml' configuration file on object '${green(key)}': '${green(propKey)}'`,
+							)
+						else
+							warningLog(
+								`Option type missmatch in 'config.toml'  configuration file. Property '${green(propKey)}' on object '${green(key)}' should have type '${green(typeof GODO[propKey])}', found: '${green(typeof prop[propKey])}'`,
 							)
 					}
 				}
 			} else
-				log(
-					"warning",
-					warning(
-						`Option type missmatch in toml configuration file. Option '${green(prop)}' should have type '${green(typeof globalOptionsDefault[key])}', found: '${green(typeof prop)}'`,
-					),
+				warningLog(
+					`Option type missmatch in 'config.toml'  configuration file. Option '${green(key)}' should have type '${green(typeof globalOptionsDefault[key])}', found: '${green(typeof prop)}'`,
 				)
 		} else {
-			log(
-				"warning",
-				warning(
-					`Unknown key in 'config.toml' configuration file: '${green(key)}'`,
-				),
+			warningLog(
+				`Unknown key in 'config.toml' configuration file: '${green(key)}'`,
 			)
 		}
 	}

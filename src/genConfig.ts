@@ -109,7 +109,7 @@ function addObjToToml<
 	N extends keyof FilterObjectProps<typeof config, Record<string, any>>,
 	T extends Record<string, any>,
 >(name: N, obj: T) {
-	toml += `\n\n# ${(config[name] as unknown as { description: string }).description}\n[${name}]`
+	toml += `\n\n\n# ${(config[name] as unknown as { description: string }).description}\n[${name}]\n`
 	for (var [keyRaw, description] of Object.entries(obj)) {
 		var key = keyRaw as Values<FilteredObjectConfigProps> | "description",
 			value = globalOptionsDefault[name][key as keyof typeof key]

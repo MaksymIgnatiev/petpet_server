@@ -202,6 +202,4 @@ function restart() {
 	else listening()
 }
 
-genConfig("env")
-
 restart()

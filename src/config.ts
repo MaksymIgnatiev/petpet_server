@@ -1,3 +1,5 @@
+fileNotForRunning()
+
 class Config implements GlobalOptions {
 	#state: GlobalOptions["state"] = "ready"
 	version = "0.1.0"
@@ -31,14 +33,19 @@ class Config implements GlobalOptions {
 			})
 		}
 	}
-	private checkSetStateCallStack(stack: string) {
-		return /[ \t]*at setState.+config.ts/.test(stack)
+	private getCallStack() {
+		return new Error().stack ?? ""
 	}
-	private checkGetStateCallStack(stack: string) {
-		return /[ \t]*at (getState|setGlobalOption).+config.ts/.test(stack)
+	private checkSetStateCallStack() {
+		return /[ \t]*at setState.+config.ts/.test(this.getCallStack())
+	}
+	private checkGetStateCallStack() {
+		return /[ \t]*at (getState|setGlobalOption).+config.ts/.test(
+			this.getCallStack(),
+		)
 	}
 	get state() {
-		if (this.checkGetStateCallStack(new Error().stack ?? "")) {
+		if (this.checkGetStateCallStack()) {
 			return this.#state
 		} else {
 			// Do not try to get the value of the 'state' field from other place, because it can be unsafe
@@ -48,7 +55,7 @@ class Config implements GlobalOptions {
 		}
 	}
 	set state(value) {
-		if (this.checkSetStateCallStack(new Error().stack ?? "")) {
+		if (this.checkSetStateCallStack()) {
 			this.#state = value
 		} else {
 			// Do not try to set the value of the 'state' field from other place, because it can be unsafe
@@ -88,38 +95,8 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		},
 	},
 	// Absolute path to the root of the project
-	ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), "../")
-
-var globalOptions: GlobalOptions = new Config()
-
-fileNotForRunning()
-
-import { join, dirname } from "path"
-import { fileURLToPath } from "url"
-import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
-import type {
-	AllGlobalConfigOptions,
-	FilteredBooleanConfigProps,
-	FilteredNumberConfigProps,
-	FilteredObjectConfigProps,
-	FilteredStringConfigProps,
-	FilterObjectProps,
-	GlobalOptionProp,
-	GlobalOptionPropPriorityAll,
-	GlobalOptionPropPriorityLevel,
-	GlobalOptionPropPriorityString,
-	GlobalOptions,
-	GlobalOptionsValues,
-	IndexOf,
-	UnionToTuple,
-	Values,
-} from "./types"
-
-var stateList = ["configuring", "ready"] satisfies UnionToTuple<
-	GlobalOptions["state"]
->
-
-export var priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
+	ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), "../"),
+	priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
 		"original",
 		"config",
 		"arguments",
@@ -149,6 +126,32 @@ export var priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
 		"server",
 		"logOptions",
 	]
+
+var globalOptions: GlobalOptions = new Config(),
+	stateList = ["configuring", "ready"] satisfies UnionToTuple<
+		GlobalOptions["state"]
+	>
+
+import { join, dirname } from "path"
+import { fileURLToPath } from "url"
+import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
+import type {
+	AllGlobalConfigOptions,
+	FilteredBooleanConfigProps,
+	FilteredNumberConfigProps,
+	FilteredObjectConfigProps,
+	FilteredStringConfigProps,
+	FilterObjectProps,
+	GlobalOptionProp,
+	GlobalOptionPropPriorityAll,
+	GlobalOptionPropPriorityLevel,
+	GlobalOptionPropPriorityString,
+	GlobalOptions,
+	GlobalOptionsValues,
+	IndexOf,
+	UnionToTuple,
+	Values,
+} from "./types"
 
 function applyGlobalProp<O extends Values<FilteredObjectConfigProps>>(obj: O) {
 	return Object.fromEntries(
@@ -191,6 +194,7 @@ export function setGlobalOption<
 	if (
 		globalOptions.state === "configuring" &&
 		!hasNullable(option, value, priority) &&
+		Object.hasOwn(globalOptions, option) &&
 		comparePriorities(globalOptions[option].source, priority) < 0 &&
 		sameType(globalOptions[option].value, value)
 	) {

@@ -1,30 +1,28 @@
-# Petpet http server  
+# Petpet HTTP server  
 
-## Petpet http server written in TS, supported with Bun.js, Hono and Sharp.js  
+## Petpet HTTP server written in TypeScript, supported with Bun.js, Hono, Sharp.js, Gifwrap and Zlib  
 
 To install Bun:  
-1. Head over to [Bun's official page](https://bun.sh)  
-2. Follow instruction on how to install on your operating system (GNU+Linu/Mac/Windows)  
+1. Head over to [Bun's official website](https://bun.sh)  
+2. Follow instruction on how to install on your operating system (GNU+Linux/Mac/Windows)  
 
 To install dependencies:  
-
-```bash
+```sh
 bun install
 ```
-To run the projct:
 
-```bash
+To run the projct:
+```sh
 bun start 
 ```
 
-To see help window:
-
-```bash
+To see help page:
+```sh
+# More preferable
 bun run help
-
 # or
-
 bun start -h
 ```
 
-You can spesify runtime options in `config.toml` or `.env` files. Read `configuration.md` file for more  
+You can spesify runtime options in `config.toml` or `.env` files or with flags. Read `configuration.md` file for more, or see the help page with available flags.  
+There are different routes available. Documentation can be found in `routes.md` file.  

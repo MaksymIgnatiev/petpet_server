@@ -6,9 +6,11 @@ import { join } from "path"
 import type {
 	AllGlobalConfigOptions,
 	AlwaysResolvingPromise,
+	ANSIRGB,
 	ChechValidParamsParam,
 	FilterObjectProps,
 	GlobalOptionPropPriorityAll,
+	LogLevel,
 	LogOption,
 	LogOptionLong,
 	LogOptions,
@@ -23,53 +25,25 @@ import {
 	priorityLevel,
 	setState,
 	ROOT_PATH,
+	logLevel,
 } from "./config"
 import zlib from "zlib"
 import { TOML } from "bun"
 import { parseEnv, parseToml } from "./parseConfigFile"
-import main, { helpFlags } from "./help"
 
 var lightblue = [0, 170, 210] as const
 
-type ANSIRGB<
-	R extends number = number,
-	G extends number = number,
-	B extends number = number,
-> = `38;2;${R};${G};${B}`
-
 export function fileNotForRunning() {
-	import("./config").then(() => {
-		var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)
-		if (file && file[0] !== "help.ts" && file[0] !== "index.ts") {
-			{
-				console.log(
-					error(
-						`File ${green(`@/src/${file[0]}`)} is a library file and is not intended to be run directly`,
-					),
-				)
-				process.exit()
-			}
-		} else if (file && file[0] === "help.ts") {
-			if (process.argv[2] === "-f") {
-				// Running this file directly will not load the entry point to process flags => less CPU usage :)
-
-				var flag = process.argv[3]?.toLowerCase().trim()
-				if (
-					flag === undefined ||
-					helpFlags.includes(flag as (typeof helpFlags)[number])
-				)
-					main(flag as (typeof helpFlags)[number])
-				else console.log(error(`Unknown help section: ${green(flag)}`))
-			} else {
-				console.log(
-					warning(
-						`File ${green("@/src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
-					),
-				)
-				process.exit()
-			}
-		}
-	})
+	var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)?.[0]
+	if (file && (file === "index.ts" || file === "help.ts")) return
+	else {
+		console.log(
+			error(
+				`File ${green(`@/src/${file}`)} is a library file and is not intended to be run directly`,
+			),
+		)
+		process.exit()
+	}
 }
 
 export function customLogTag<S extends string, C extends ANSIRGB>(
@@ -106,31 +80,41 @@ export function green(text: any) {
 export function isLogfeatureEnabled(feature: LogOptionLong) {
 	return getLogOption(feature) ?? false
 }
-type GetLogOption<O extends LogOptionShort | LogOptionLong> =
-	O extends LogOptionShort
-		? {
-				[K in keyof LogOptions]: K extends `${O}${string}` ? K : never
-			}[keyof LogOptions]
-		: O extends LogOptionLong
-			? O
-			: never
+type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> =
+	O extends LogLevel
+		? (typeof logLevel)[O]
+		: O extends LogOptionShort
+			? {
+					[K in keyof LogOptions]: K extends `${O}${string}`
+						? K
+						: never
+				}[keyof LogOptions]
+			: O extends LogOptionLong
+				? O
+				: never
 
-function normalizeLogOption<O extends LogOptionShort | LogOptionLong>(
-	option: O,
-): GetLogOption<O> {
-	return "" as GetLogOption<O>
+function normalizeLogOption<
+	O extends LogOptionShort | LogOptionLong | LogLevel,
+>(option: O): GetLogOption<O> {
+	return (
+		typeof option === "number"
+			? option < 6 && option > -1
+				? logLevel[option]
+				: "rest"
+			: (logLevel.find((e) => e[0] === option || e === option) ?? "rest")
+	) as GetLogOption<O>
 }
 
 type LogDependency = "info" | "error" | "warning" | LogOption
 
-/** Log things based on log options enabled */
+/** Log things on different events in form of dependencies */
 export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
 	var doLog = false
-	if (getGlobalOption("quiet")) doLog = false
+	if (!getGlobalOption("quiet")) doLog = true
 	else if (dependency === "info") doLog = true
-	else if (dependency === "error" && getGlobalOption("errors")) doLog = true
-	else if (dependency === "warning" && getGlobalOption("warnings"))
-		doLog = true
+	else if (dependency === "error") getGlobalOption("errors") && (doLog = true)
+	else if (dependency === "warning")
+		getGlobalOption("warnings") && (doLog = true)
 	else if (typeof dependency === "number") {
 	} else if (typeof dependency === "string") {
 		if (dependency.includes(",")) {
@@ -346,12 +330,7 @@ export function isNumber(obj: unknown): obj is number {
 	return typeof obj === "number" && !isNaN(obj) && Number.isFinite(obj)
 }
 export function isStringNumber(obj: unknown): obj is `${number}` {
-	return (
-		typeof obj === "string" &&
-		/^-?\d+$/.test(obj) &&
-		!isNaN(+obj) &&
-		Number.isFinite(+obj)
-	)
+	return typeof obj === "string" && /^-?\d+$/.test(obj) && isNumber(+obj)
 }
 
 export function isBoolean(obj: unknown): obj is boolean {

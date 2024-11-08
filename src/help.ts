@@ -18,7 +18,7 @@ var terminalWidth = process.stdout.columns || 80,
 		[["p", "params"], "Request parameters"],
 		[["c", "cache"], "Info about cleanup the cache"],
 		[
-			["n", "notify-on-restart"],
+			["w", "watch"],
 			"Log all features that are enabled on startup/restart",
 		],
 	]),
@@ -38,17 +38,38 @@ var terminalWidth = process.stdout.columns || 80,
 	sections: Section<string, string> = new Map([
 		["flags", "Show all available flags"],
 		["log_options", "Show all available log options"],
+		["timestamp_format", "Show all available log options"],
 		["sections", "Show this message"],
 	])
+
+if (process.argv[1].match(/help\.ts$/)) {
+	if (process.argv[2] === "-f") {
+		// Running this file directly will not load the entry point to process flags => less CPU usage :)
+
+		var flag = process.argv[3]?.toLowerCase().trim()
+		if (
+			flag === undefined ||
+			helpFlags.includes(flag as (typeof helpFlags)[number])
+		)
+			main(flag as (typeof helpFlags)[number])
+		else console.log(error(`Unknown help section: ${green(flag)}`))
+	} else {
+		console.log(
+			warning(
+				`File ${green("@/src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
+			),
+		)
+		process.exit()
+	}
+}
+
 import { flagObjects, setupFlagHandlers } from "./flags"
-import { error, fileNotForRunning, green, warning } from "./functions"
+import { error, green, warning } from "./functions"
 type FlagRest = [string | string[], string] | string
 type Section<
 	T extends string | string[] = string,
 	V extends FlagRest = FlagRest,
 > = Map<T, V>
-
-fileNotForRunning()
 
 class FormatedOption {
 	#formated: string
@@ -234,7 +255,7 @@ function printFlags(extended = false) {
 		})(),
 
 		[
-			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LCAq")}'`,
+			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LCAWEt")}'`,
 		],
 	).print()
 }
@@ -244,7 +265,7 @@ function printLogOptions() {
 		"LOG OPTIONS",
 		optionsLog,
 		[
-			`To select custom properties, use coma to separate them. Ex: '${green("-l r,g,p,c")}'`,
+			`To select custom properties, use coma to separate them. Ex: '${green("-l r,g,p,c,w")}'`,
 		],
 		25,
 	).print()
@@ -264,9 +285,11 @@ function printTimespampOptions() {
 		9,
 	).print()
 }
+
 function printSections() {
 	createCLISection("SECTIONS", sections).print()
 }
+
 export default function main(section?: (typeof helpFlags)[number]) {
 	var flags = false,
 		logOptions = false,

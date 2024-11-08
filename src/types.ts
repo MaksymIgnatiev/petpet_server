@@ -1,10 +1,16 @@
 fileNotForRunning()
 
 import type { Avatar, PetPet } from "./db"
-import { error, fileNotForRunning, green } from "./functions"
+import { fileNotForRunning } from "./functions"
 import type { helpFlags } from "./help"
 
 // ---- Utility types ----
+
+export type ANSIRGB<
+	R extends number = number,
+	G extends number = number,
+	B extends number = number,
+> = `${"38" | "48"};2;${R};${G};${B}`
 
 /** Promise that always resolve a value without any failures */
 export type AlwaysResolvingPromise<T> = Omit<Promise<T>, "catch" | "then"> & {
