@@ -33,6 +33,7 @@ import { parseEnv, parseToml } from "./parseConfigFile"
 
 var lightblue = [0, 170, 210] as const
 
+/** Call this function at the top of the file if you don't want this file to be run directly */
 export function fileNotForRunning() {
 	var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)?.[0]
 	if (file && (file === "index.ts" || file === "help.ts")) return

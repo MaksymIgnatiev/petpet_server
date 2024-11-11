@@ -26,3 +26,8 @@ bun start -h
 
 You can spesify runtime options in `config.toml` or `.env` files or with flags. Read `configuration.md` file for more, or see the help page with available flags.  
 There are different routes available. Documentation can be found in `routes.md` file.  
+
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.  

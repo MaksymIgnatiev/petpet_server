@@ -20,11 +20,11 @@ _Note!_ Flag `-w` will watch for: file creation, file content change, and file r
 Use the `bun start -g [toml|env]` command to generate a default config file for given type with default values to see and modify them to the needs.  
 
 _Note!_ To specify options inside `.env` file, use the `petpet_` prefix to avoid conflicts with existing environment variables.  
-_Note!_ To specify object options inside `.env` file, use underscore symbol `_` to separate object name from object keys.
+_Note!_ To specify object options inside `.env` file, use dot symbol `.` to separate object name from object keys like "object access operator".
 Example:
 ```env
 # Set the `port` property on `server` object to the value of `3000`
-petpet_server_port = 3000
+petpet_server.port = 3000
 ```
 
 _Note!_ Despite the fact that all values in `env` file are strings, they will be converted automatically based on schema inside the project.

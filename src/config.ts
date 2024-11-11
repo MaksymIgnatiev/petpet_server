@@ -2,7 +2,7 @@ fileNotForRunning()
 
 class Config implements GlobalOptions {
 	#state: GlobalOptions["state"] = "ready"
-	version = "0.1.0"
+	readonly version = "0.1.0"
 	avatars!: GlobalOptions["avatars"]
 	cache!: GlobalOptions["cache"]
 	cacheCheckTime!: GlobalOptions["cacheCheckTime"]

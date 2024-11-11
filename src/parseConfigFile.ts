@@ -16,7 +16,6 @@ import {
 import { envPrefix } from "./genConfig"
 import type {
 	AllGlobalConfigOptions,
-	BaseConfigOptions,
 	FilteredObjectConfigProps,
 	Values,
 } from "./types"
@@ -39,6 +38,43 @@ export function parseEnv() {
 			) {
 				var obj = globalOptionsDefault[key]
 				if (typeof obj === "object" && !Array.isArray(obj)) {
+					var prop = keyRaw.match(
+						/(?<=[a-zA-Z0-9]+\.)[a-zA-Z0-9]+/,
+					)?.[0] as
+						| keyof Values<FilteredObjectConfigProps>
+						| undefined
+					if (prop) {
+						if (Object.hasOwn(obj, prop)) {
+							var object =
+								obj as unknown as Values<FilteredObjectConfigProps>
+							var option = object[prop as keyof typeof object] as
+								| number
+								| string
+								| boolean
+							var type = typeof option
+							if (type === "string") {
+								value = valueRaw ?? ""
+								// TS types goes crazy, but it's runtime safe. Trust me 😉
+								setGlobalObjectOption(
+									key as keyof FilteredObjectConfigProps,
+									prop,
+									value as Values<
+										Values<FilteredObjectConfigProps>
+									>,
+									1,
+								)
+							} else if (type === "number") {
+							} else if (type === "boolean") {
+							}
+						} else
+							warningLog(
+								`Unknown property key in '.env' configuration file on object '${green(keyRaw)}': '${green(prop)}'`,
+							)
+					} else
+						warningLog(
+							`Property key on object '${green(key)}' is not defined`,
+						)
+				} else {
 					var typeofObject = typeof obj
 					if (typeofObject === "number") {
 						if (isStringNumber(valueRaw)) {
@@ -49,9 +85,11 @@ export function parseEnv() {
 					} else if (typeofObject === "boolean") {
 					} else if (typeofObject === "string") {
 					}
-				} else {
 				}
-			}
+			} else
+				warningLog(
+					`Unknown key in '.env' configuration file: '${green(key)}'`,
+				)
 		}
 	}
 }
