@@ -6,7 +6,7 @@
 		"module": "ESNext",
 		"moduleDetection": "force",
 		"allowJs": true,
-		"include": ["toml.d.ts"]
+		"include": ["toml.d.ts"],
 
 		// Bundler mode
 		"moduleResolution": "bundler",
