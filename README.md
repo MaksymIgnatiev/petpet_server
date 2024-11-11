@@ -24,8 +24,8 @@ bun run help
 bun start -h
 ```
 
-You can spesify runtime options in `config.toml` or `.env` files or with flags. Read `configuration.md` file for more, or see the help page with available flags.  
-There are different routes available. Documentation can be found in `routes.md` file.  
+You can spesify runtime options in `config.toml` or `.env` files or with flags. Read `[configuration.md](/configuration.md)` file for more, or see the help page with available flags.  
+There are different routes available. Documentation can be found in `[routes.md](/routes.md)` file.  
 
 
 ## License

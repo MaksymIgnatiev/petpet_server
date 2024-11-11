@@ -81,6 +81,9 @@ export type Combinations<
 	S extends string = "",
 	_ extends string = T,
 > = T extends any ? T | `${T}${S}${Combinations<Exclude<_, T>, S>}` : never
+
+// ---- Options ----
+
 export type GlobalOptionPropPriorityString = "original" | "config" | "arguments"
 export type GlobalOptionPropPriorityLevel = 0 | 1 | 2
 export type GlobalOptionPropPriorityAll =
@@ -280,49 +283,6 @@ export type Flag<T extends FlagValueUnion> = {
 	extendedDescription: string
 	handler: (...args: FlagHandlerParam<T>) => void
 }
-
-type FlagShortRequireBase = {
-	/** Log level (0-4 | features...) */
-	l: LogLevel | LogOptionCombination // | Combinations<LogOptionShort | LogOptionLong, ","> // ts is lagging
-	/** Cache time in milliseconds */
-	c: number
-	/** Generate config file with type: `"toml"` | `"env"` (default=`"toml"`)*/
-	g?: "toml" | "env"
-	/** Show specific help section */
-	h?: (typeof helpFlags)[number]
-	/** Enable timestamps, and optionaly pass the format as a string (default=`"s:m:h D.M.Y"`) */
-	t?: string
-	/** Host on where to run the server */
-	H: string
-	/** Port on where to run the server */
-	P: number
-}
-
-// Same as above, but for long flags
-
-export type FlagMaps = {
-	q: "quiet"
-	C: "no-cache"
-	A: "no-avatars"
-	L: "log-features"
-	h: "help"
-	v: "version"
-	O: "omit-config"
-	w: "watch"
-	l: "log"
-	c: "cache-time"
-	g: "gen-config"
-	W: "no-warnings"
-	E: "no-errors"
-	t: "timestamps"
-	H: "host"
-	P: "port"
-}
-type LongFlagsOnlyRequireBase = {
-	"cache-type": AllGlobalConfigOptions["cacheType"]
-}
-
-export type LongFlagsOnly = "cache-type"
 
 // ----- Params -----
 
