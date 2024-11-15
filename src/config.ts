@@ -67,8 +67,8 @@ class Config implements GlobalOptions {
 }
 
 export var globalOptionsDefault: AllGlobalConfigOptions = {
-		cacheTime: 15 * 60_000, // 15 minutes, in `ms`
-		cacheCheckTime: 60_000, // 1 minute, in `ms`
+		cacheTime: 15 * 60_000, // 15 minutes in `ms`
+		cacheCheckTime: 60_000, // 1  minute  in `ms`
 		cache: true,
 		cacheType: "code",
 		configFile: "default",
@@ -80,8 +80,9 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		quiet: false,
 		permanentCache: false,
 		watch: false,
-		timestamps: false,
-		timestampFormat: "h:m:s D.M.Y",
+		timestamps: true,
+		// TODO: replace with original: "h:m:s D.M.Y"
+		timestampFormat: "h:m:s:S",
 		logOptions: {
 			rest: false,
 			gif: false,
@@ -152,6 +153,7 @@ import type {
 	UnionToTuple,
 	Values,
 } from "./types"
+import { openInEditor } from "bun"
 
 function applyGlobalProp<O extends Values<FilteredObjectConfigProps>>(obj: O) {
 	return Object.fromEntries(
@@ -180,7 +182,7 @@ export function setState<S extends GlobalOptions["state"]>(state: S) {
 	} else {
 		// this will only work with type assertion. Don't play with it :)
 		throw new Error(
-			`State for global configuration does not satisfies the type: ${stateList.map((e) => `'${green(e)}'`).join(" | ")}. State '${state}' was provided`,
+			`State for global configuration does not satisfies the type: '${stateList.map(green).join("' | '")}'. State '${state}' was provided`,
 		)
 	}
 }
@@ -405,6 +407,7 @@ export function setGlobalObjectOption<
 		!hasNullable(object, key, value, priority) &&
 		Object.hasOwn(globalOptions, object) &&
 		typeof globalOptions[object] === "object" &&
+		!Array.isArray(globalOptions[object]) &&
 		Object.hasOwn(globalOptions[object], key) &&
 		sameType(
 			(globalOptions[object][key] as GlobalOptionProp<V>).value,

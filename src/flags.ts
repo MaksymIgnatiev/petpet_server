@@ -1,9 +1,25 @@
 fileNotForRunning()
 
-import { error, fileNotForRunning, green, isStringNumber } from "./functions"
-import { getVersion, setGlobalOption, setState } from "./config"
+import {
+	error,
+	fileNotForRunning,
+	formatDate,
+	green,
+	isStringNumber,
+} from "./functions"
+import {
+	getGlobalOption,
+	getVersion,
+	setGlobalOption,
+	setState,
+} from "./config"
 import printHelp, { helpFlags } from "./help"
-import type { Flag, FlagValueArray, FlagValueUnion } from "./types"
+import type {
+	Flag,
+	FlagValueArray,
+	FlagValueForArray,
+	FlagValueUnion,
+} from "./types"
 import { genConfig } from "./genConfig"
 
 var flagRegex = /^-([a-zA-Z]|-[a-z\-]+)$/,
@@ -304,6 +320,23 @@ export function setupFlagHandlers() {
 		extendedDescription: "",
 		handler(value) {
 			errorLog(`Flag -H, --host is not implemented. Value is: '${value}'`)
+		},
+	})
+
+	// test flag
+	addFlag.empty({
+		short: "X",
+		long: "XXX",
+		value: "none",
+		parameter: "",
+		description: "test, nothing spesial",
+		extendedDescription: "",
+		handler() {
+			console.log(
+				green(
+					`[${formatDate(new Date(), getGlobalOption("timestampFormat"))}]`,
+				) + "handler called",
+			)
 		},
 	})
 }

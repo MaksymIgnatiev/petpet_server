@@ -1,5 +1,6 @@
 fileNotForRunning()
 
+import type { logLevel } from "./config"
 import type { Avatar, PetPet } from "./db"
 import { fileNotForRunning } from "./functions"
 import type { helpFlags } from "./help"
@@ -186,6 +187,20 @@ export type GlobalOptions = {
 } & ApplyGlobalOptionPropTypeRecursively<AllGlobalConfigOptions>
 
 // ----- Log Options -----
+
+export type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> =
+	O extends LogLevel
+		? (typeof logLevel)[O]
+		: O extends LogOptionShort
+			? {
+					[K in keyof LogOptions]: K extends `${O}${string}`
+						? K
+						: never
+				}[keyof LogOptions]
+			: O extends LogOptionLong
+				? O
+				: never
+
 export type LogOption = LogString | LogLevel
 export type LogOptions<
 	R extends boolean = boolean,
@@ -233,7 +248,11 @@ export type ServerOptions<
 
 export type FlagValue = "none" | "optional" | "required"
 export type FlagValueArray = ("required" | "optional")[]
-export type FlagValueUnion = FlagValue | FlagValueArray
+export type FlagValueForArray = "optional" | "required"
+export type FlagValueUnion =
+	| FlagValue
+	| FlagValueArray
+	| Readonly<FlagValueArray>
 
 export type FlagParameterType = {
 	required: `<${string}>`
@@ -285,6 +304,13 @@ export type Flag<T extends FlagValueUnion> = {
 }
 
 // ----- Params -----
+
+export type LogDependency =
+	| "info"
+	| "error"
+	| "warning"
+	| LogLevel
+	| LogOptionLongCombination
 
 export type ChechValidParamsParam = {
 	userID: string

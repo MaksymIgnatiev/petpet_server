@@ -9,10 +9,13 @@ import type {
 	ANSIRGB,
 	ChechValidParamsParam,
 	FilterObjectProps,
+	GetLogOption,
 	GlobalOptionPropPriorityAll,
+	LogDependency,
 	LogLevel,
 	LogOption,
 	LogOptionLong,
+	LogOptionLongCombination,
 	LogOptions,
 	LogOptionShort,
 	LogStringOne,
@@ -81,18 +84,6 @@ export function green(text: any) {
 export function isLogfeatureEnabled(feature: LogOptionLong) {
 	return getLogOption(feature) ?? false
 }
-type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> =
-	O extends LogLevel
-		? (typeof logLevel)[O]
-		: O extends LogOptionShort
-			? {
-					[K in keyof LogOptions]: K extends `${O}${string}`
-						? K
-						: never
-				}[keyof LogOptions]
-			: O extends LogOptionLong
-				? O
-				: never
 
 function normalizeLogOption<
 	O extends LogOptionShort | LogOptionLong | LogLevel,
@@ -106,10 +97,8 @@ function normalizeLogOption<
 	) as GetLogOption<O>
 }
 
-type LogDependency = "info" | "error" | "warning" | LogOption
-
 /** Log things on different events in form of dependencies */
-export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
+export function log<D extends LogDependency>(dependency: D, arg: any) {
 	var doLog = false
 	if (!getGlobalOption("quiet")) doLog = true
 	else if (dependency === "info") doLog = true
@@ -128,7 +117,7 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
 		} else if (getLogOption(normalizeLogOption(dependency as LogStringOne)))
 			doLog = true
 	}
-	doLog && console.log(...args)
+	doLog && console.log(arg)
 }
 
 /** Formats the input date with a given format:
@@ -152,7 +141,7 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
  *
  * @returns Formated date as a string
  */
-function formatDate<F extends string>(date: Date, format: F) {
+export function formatDate<F extends string>(date: Date, format: F) {
 	return (
 		format
 			// milliseconds
@@ -359,6 +348,7 @@ export function getConfig<R extends boolean = false>(
 ): AlwaysResolvingPromise<boolean> {
 	setState("configuring")
 	var config = getConfigType()
+
 	return new Promise<boolean>((resolve) => {
 		if (config === "config.toml") {
 			Bun.file(join(ROOT_PATH, config))

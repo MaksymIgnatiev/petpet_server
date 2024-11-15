@@ -1,6 +1,6 @@
 # Configuration for the project
 
-You can use configuration files to specify features that you want to use in project. They will override the default values that can be found in `./src/config.ts` file under the `globalOptionsDefault` object on line `69`.  
+You can use configuration files to specify features that you want to use in project. They will override the default values that can be found in [`./src/config.ts`](https://github.com/MaksymIgnatiev/petpet_server/blob/master/src/config.ts#L69) file under the [`globalOptionsDefault`](https://github.com/MaksymIgnatiev/petpet_server/blob/master/src/config.ts#L69) object on line[`69`](https://github.com/MaksymIgnatiev/petpet_server/blob/master/src/config.ts#L69).  
 
 There are 2 configuration files available: `config.toml`, `.env`  
 They will be applied in such order:  

@@ -14,16 +14,13 @@ var env = "",
 				}
 			: string
 	} = {
-		cacheTime:
-			"Cache duration in milliseconds (default = 15 minutes, 900_000 ms)",
-		cacheCheckTime:
-			"Interval to check cache validity in milliseconds (default = 1 minute, 60_000 ms)",
-		cache: "Enable or disable caching (default = true)",
-		cacheType:
-			"Type of the cache to save ('code' | 'fs' | 'both') (default = 'code')",
+		cacheTime: "Cache duration in milliseconds",
+		cacheCheckTime: "Interval to check cache validity in milliseconds",
+		cache: "Enable or disable caching",
+		cacheType: "Type of the cache to save ('code' | 'fs' | 'both')",
 		configFile:
-			"Name of the configuration file ('config.toml' | 'env' | 'default' ) (default = 'default')",
-		avatars: "Enable or disable avatar caching (default = true)",
+			"Name of the configuration file ('config.toml' | 'env' | 'default' )",
+		avatars: "Enable or disable avatar caching",
 		warnings: "Toggle to enable or disable warnings",
 		errors: "Toggle to enable or disable error logging",
 		logFeatures: "Log features used in the application",
@@ -72,7 +69,7 @@ export function genConfig<T extends "toml" | "env">(type: T) {
 		}
 	} else if (type === "env") {
 		if (!env.length) {
-			env += `# ENV configuration file\n# Use '${envPrefix}' prefix for specifying all options to not make conflict with other environmenv variables. Ex: petpet_cache, petpet_errors\n`
+			env += `# ENV configuration file\n# Use '${envPrefix}' prefix for specifying all options to not make conflict with other environmenv variables. Ex: petpet_cache, petpet_errors\n# To specify object options, use dot symbol '.' to separate object name from object keys like "member access operator". Ex: petpet_logOptions.rest, petpet_server.port\n`
 			for (var [keyRaw, value] of Object.entries(config)) {
 				var key = keyRaw as keyof typeof config
 				if (typeof value === "object" && !Array.isArray(value))
@@ -89,20 +86,28 @@ export function genConfig<T extends "toml" | "env">(type: T) {
 	)
 }
 
+function formatValue(value: any) {
+	return typeof value === "string" ? `'${value}'` : value
+}
+
+function defaultValue(value: any) {
+	return ` (default = ${value})`
+}
+
 function addPropToEnv<P extends keyof AllGlobalConfigOptions>(
 	prop: P,
 	decsription: string,
 ) {
-	var value = globalOptionsDefault[prop]
-	env += `\n\n# ${decsription}\n${envPrefix}${prop} = ${typeof value === "string" ? `'${value}'` : value}`
+	var value = formatValue(globalOptionsDefault[prop])
+	env += `\n\n# ${decsription}${defaultValue(value)}\n${envPrefix}${prop} = ${value}`
 }
 
 function addPropToToml<P extends keyof AllGlobalConfigOptions>(
 	prop: P,
 	decsription: string,
 ) {
-	var value = globalOptionsDefault[prop]
-	toml += `\n\n# ${decsription}\n${prop} = ${typeof value === "string" ? `'${value}'` : value}`
+	var value = formatValue(globalOptionsDefault[prop])
+	toml += `\n\n# ${decsription}${defaultValue(value)}\n${prop} = ${value}`
 }
 
 function addObjToToml<
@@ -112,9 +117,11 @@ function addObjToToml<
 	toml += `\n\n\n# ${(config[name] as unknown as { description: string }).description}\n[${name}]\n`
 	for (var [keyRaw, description] of Object.entries(obj)) {
 		var key = keyRaw as Values<FilteredObjectConfigProps> | "description",
-			value = globalOptionsDefault[name][key as keyof typeof key]
+			value = formatValue(
+				globalOptionsDefault[name][key as keyof typeof key],
+			)
 		if (key !== "description")
-			toml += `\n# ${description}\n${key} = ${typeof value === "string" ? `'${value}'` : value}`
+			toml += `\n# ${description}${defaultValue(value)}\n${key} = ${value}`
 	}
 }
 function addObjToEnv<
@@ -124,8 +131,10 @@ function addObjToEnv<
 	env += `\n\n\n# ${(config[name] as unknown as { description: string }).description}\n`
 	for (var [keyRaw, description] of Object.entries(obj)) {
 		var key = keyRaw as Values<FilteredObjectConfigProps> | "description",
-			value = globalOptionsDefault[name][key as keyof typeof key]
+			value = formatValue(
+				globalOptionsDefault[name][key as keyof typeof key],
+			)
 		if (key !== "description")
-			env += `\n# ${description}\n${envPrefix}${name}_${key} = ${typeof value === "string" ? `'${value}'` : value}`
+			env += `\n# ${description}${defaultValue(value)}\n${envPrefix}${name}.${key} = ${value}`
 	}
 }

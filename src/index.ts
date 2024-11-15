@@ -1,3 +1,4 @@
+console.log(green(formatDate(new Date(), getGlobalOption("timestampFormat"))))
 import fs from "fs"
 import { Hono } from "hono"
 import { defaultPetPetParams, fetchAvatar, generatePetPet } from "./petpet"
@@ -7,6 +8,7 @@ import type { PetPetParams, Hash } from "./types"
 import {
 	checkValidRequestParams,
 	error,
+	formatDate,
 	getConfig,
 	green,
 	info,
@@ -186,20 +188,21 @@ function listening() {
 }
 
 function restart() {
-	if (intervalID) clearInterval(intervalID)
-	processFlags(args)
+	// if (intervalID) clearInterval(intervalID)
+	args.length && processFlags(args)
 
-	intervalID = setInterval(chechCache, 60_000)
+	// intervalID = setInterval(chechCache, 60_000)
+	getConfig().then(() => {
+		if (server) server?.stop?.()
 
-	if (server) server?.stop?.()
-
-	server = Bun.serve({
-		fetch: app.fetch,
-		port: getServerOption("port"),
-		hostname: getServerOption("host"),
+		server = Bun.serve({
+			fetch: app.fetch,
+			port: getServerOption("port"),
+			hostname: getServerOption("host"),
+		})
+		if (getGlobalOption("useConfig")) getConfig().then(listening)
+		else listening()
 	})
-	if (getGlobalOption("useConfig")) getConfig().then(listening)
-	else listening()
 }
 
 restart()

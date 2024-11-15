@@ -29,7 +29,7 @@ export function parseEnv() {
 		if (keyRaw.startsWith(envPrefix)) {
 			keyRaw = keyRaw.replace(envPrefix, "")
 			var key = keyRaw.match(
-					/[a-zA-Z]/,
+					/[a-zA-Z]+/,
 				)![0] as keyof AllGlobalConfigOptions,
 				value: string | number | boolean
 			if (
@@ -39,10 +39,11 @@ export function parseEnv() {
 				var obj = globalOptionsDefault[key]
 				if (typeof obj === "object" && !Array.isArray(obj)) {
 					var prop = keyRaw.match(
-						/(?<=[a-zA-Z0-9]+\.)[a-zA-Z0-9]+/,
+						/(?<=[a-zA-Z]+\.)[a-zA-Z]+/,
 					)?.[0] as
 						| keyof Values<FilteredObjectConfigProps>
 						| undefined
+
 					if (prop) {
 						if (Object.hasOwn(obj, prop)) {
 							var object =
@@ -68,11 +69,11 @@ export function parseEnv() {
 							}
 						} else
 							warningLog(
-								`Unknown property key in '.env' configuration file on object '${green(keyRaw)}': '${green(prop)}'`,
+								`Unknown property key in '.env' configuration file on object '${green(key)}': '${green(prop)}'`,
 							)
 					} else
 						warningLog(
-							`Property key on object '${green(key)}' is not defined`,
+							`Property key on object '${green(key)}' is missing`,
 						)
 				} else {
 					var typeofObject = typeof obj
@@ -97,7 +98,7 @@ export function parseEnv() {
 export function parseToml(obj: Record<string, any>) {
 	for (var keyRaw of Object.keys(obj)) {
 		var key = keyRaw as keyof typeof globalOptionsDefault
-		if (globalOptionsDefault[key] !== undefined && key !== "useConfig") {
+		if (Object.hasOwn(globalOptionsDefault, key) && key !== "useConfig") {
 			var prop = obj[key]
 			if (sameType(globalOptionsDefault[key], prop)) {
 				if (
@@ -109,29 +110,28 @@ export function parseToml(obj: Record<string, any>) {
 				} else {
 					for (var propKeyRaw of Object.keys(prop)) {
 						var propKey =
-								propKeyRaw as keyof FilteredObjectConfigProps,
+								propKeyRaw as keyof Values<FilteredObjectConfigProps>,
 							GODO = globalOptionsDefault[
 								key
-							] as unknown as FilteredObjectConfigProps
-						if (
-							sameType(GODO[propKey], prop[propKey]) &&
-							Object.hasOwn(GODO, propKey)
-						) {
-							setGlobalObjectOption(
-								key as keyof FilteredObjectConfigProps,
-								prop as keyof Values<FilteredObjectConfigProps>,
-								prop[propKey] as Values<
-									keyof Values<FilteredObjectConfigProps>
-								>,
-								1,
-							)
-						} else if (!Object.hasOwn(GODO, propKey))
+							] as unknown as Values<FilteredObjectConfigProps>
+
+						if (Object.hasOwn(GODO, propKey)) {
+							if (sameType(GODO[propKey], prop[propKey]))
+								setGlobalObjectOption(
+									key as keyof FilteredObjectConfigProps,
+									prop as keyof Values<FilteredObjectConfigProps>,
+									prop[propKey] as Values<
+										keyof Values<FilteredObjectConfigProps>
+									>,
+									1,
+								)
+							else
+								warningLog(
+									`Option type missmatch in 'config.toml'  configuration file. Property '${green(propKey)}' on object '${green(key)}' should have type '${green(typeof GODO[propKey])}', found: '${green(typeof prop[propKey])}'`,
+								)
+						} else
 							warningLog(
 								`Unknown property key in 'config.toml' configuration file on object '${green(key)}': '${green(propKey)}'`,
-							)
-						else
-							warningLog(
-								`Option type missmatch in 'config.toml'  configuration file. Property '${green(propKey)}' on object '${green(key)}' should have type '${green(typeof GODO[propKey])}', found: '${green(typeof prop[propKey])}'`,
 							)
 					}
 				}
