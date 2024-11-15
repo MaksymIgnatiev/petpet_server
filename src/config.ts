@@ -82,6 +82,7 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		watch: false,
 		timestamps: true,
 		// TODO: replace with original: "h:m:s D.M.Y"
+		// This is only for development
 		timestampFormat: "h:m:s:S",
 		logOptions: {
 			rest: false,
