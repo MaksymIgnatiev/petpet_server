@@ -1,48 +1,47 @@
 fileNotForRunning()
 
+var callStackRegex =
+	/^Error\n\s*at\s+check(S|G)etStateCallStack\s+.*config\.ts.*\n\s*at\s+state\s+.*config\.ts.*\n\s*at\s+((s|g)etState|setGlobalOption)\s+.*config\.ts/
+
 class Config implements GlobalOptions {
 	#state: GlobalOptions["state"] = "ready"
 	readonly version = "0.1.0"
 	avatars!: GlobalOptions["avatars"]
+	accurateTime!: GlobalOptions["accurateTime"]
 	cache!: GlobalOptions["cache"]
 	cacheCheckTime!: GlobalOptions["cacheCheckTime"]
 	cacheTime!: GlobalOptions["cacheTime"]
-	configFile!: GlobalOptions["configFile"]
 	cacheType!: GlobalOptions["cacheType"]
+	compression!: GlobalOptions["compression"]
 	errors!: GlobalOptions["errors"]
 	logFeatures!: GlobalOptions["logFeatures"]
 	logOptions!: GlobalOptions["logOptions"]
 	permanentCache!: GlobalOptions["permanentCache"]
 	quiet!: GlobalOptions["quiet"]
 	server!: GlobalOptions["server"]
-	warnings!: GlobalOptions["warnings"]
-	watch!: GlobalOptions["watch"]
 	timestamps!: GlobalOptions["timestamps"]
 	timestampFormat!: GlobalOptions["timestampFormat"]
 	useConfig!: GlobalOptions["useConfig"]
+	verboseErrors!: GlobalOptions["verboseErrors"]
+	warnings!: GlobalOptions["warnings"]
+	watch!: GlobalOptions["watch"]
 	constructor() {
 		for (var rawKey in globalOptionsDefault) {
 			var key = rawKey as keyof AllGlobalConfigOptions,
 				value = globalOptionsDefault[key]
 
 			Object.defineProperty(this, key, {
-				value:
-					typeof value === "object"
-						? applyGlobalProp(value)
-						: globalProp(value),
+				value: typeof value === "object" ? applyGlobalProp(value) : globalProp(value),
 			})
 		}
 	}
-	private getCallStack() {
-		return new Error().stack ?? ""
-	}
+
 	private checkSetStateCallStack() {
-		return /[ \t]*at setState.+config.ts/.test(this.getCallStack())
+		return callStackRegex.test(new Error().stack ?? "")
 	}
+
 	private checkGetStateCallStack() {
-		return /[ \t]*at (getState|setGlobalOption).+config.ts/.test(
-			this.getCallStack(),
-		)
+		return callStackRegex.test(new Error().stack ?? "")
 	}
 	get state() {
 		if (this.checkGetStateCallStack()) {
@@ -50,7 +49,7 @@ class Config implements GlobalOptions {
 		} else {
 			// Do not try to get the value of the 'state' field from other place, because it can be unsafe
 			throw new Error(
-				"Global option 'state' was retrieved from another place. It is preferable to use the 'getState' function",
+				"Global option 'state' was retrieved from another place. It is preferable to use the 'getState' function from './src/config.ts' file",
 			)
 		}
 	}
@@ -60,32 +59,32 @@ class Config implements GlobalOptions {
 		} else {
 			// Do not try to set the value of the 'state' field from other place, because it can be unsafe
 			throw new Error(
-				"Global option 'state' was set from another place. It is preferable to use the 'setState' function",
+				"Global option 'state' was set from another place. It is preferable to use the 'setState' function from './src/config.ts' file",
 			)
 		}
 	}
 }
 
 export var globalOptionsDefault: AllGlobalConfigOptions = {
+		avatars: true,
+		accurateTime: true, // false
 		cacheTime: 15 * 60_000, // 15 minutes in `ms`
 		cacheCheckTime: 60_000, // 1  minute  in `ms`
 		cache: true,
 		cacheType: "code",
-		configFile: "default",
-		avatars: true,
-		useConfig: true,
-		warnings: true,
+		compression: true,
 		errors: true,
 		logFeatures: false,
 		quiet: false,
 		permanentCache: false,
-		watch: false,
-		timestamps: true,
-		// TODO: replace with original: "h:m:s D.M.Y"
-		// This is only for development
-		timestampFormat: "h:m:s:S",
+		warnings: true,
+		watch: true, // false
+		timestamps: true, // false
+		timestampFormat: "h:m:s:S.u", // "h:m:s D.M.Y"
+		useConfig: true,
+		verboseErrors: false,
 		logOptions: {
-			rest: false,
+			rest: true, // false
 			gif: false,
 			params: false,
 			cache: false,
@@ -93,7 +92,7 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		},
 		server: {
 			port: 3000,
-			host: "localhost",
+			host: "0.0.0.0", // "localhost"
 		},
 	},
 	// Absolute path to the root of the project
@@ -103,46 +102,17 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		"config",
 		"arguments",
 	] as const,
-	logLevel = ["rest", "gif", "params", "cache", "watch"] as const,
-	numberOptions: (keyof FilteredNumberConfigProps)[] = [
-		"cacheTime",
-		"cacheCheckTime",
-	],
-	stringOptions: (keyof FilteredStringConfigProps)[] = [
-		"configFile",
-		"cacheType",
-		"timestampFormat",
-	],
-	booleanOptions: (keyof FilteredBooleanConfigProps)[] = [
-		"avatars",
-		"cache",
-		"errors",
-		"logFeatures",
-		"permanentCache",
-		"quiet",
-		"warnings",
-		"watch",
-		"timestamps",
-	],
-	objectOptions: (keyof FilteredObjectConfigProps)[] = [
-		"server",
-		"logOptions",
-	]
+	logLevel = ["rest", "gif", "params", "cache", "watch"] as const
 
 var globalOptions: GlobalOptions = new Config(),
-	stateList = ["configuring", "ready"] satisfies UnionToTuple<
-		GlobalOptions["state"]
-	>
+	stateList = ["configuring", "ready"] satisfies UnionToTuple<GlobalOptions["state"]>
 
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
 import type {
 	AllGlobalConfigOptions,
-	FilteredBooleanConfigProps,
-	FilteredNumberConfigProps,
 	FilteredObjectConfigProps,
-	FilteredStringConfigProps,
 	FilterObjectProps,
 	GlobalOptionProp,
 	GlobalOptionPropPriorityAll,
@@ -154,7 +124,6 @@ import type {
 	UnionToTuple,
 	Values,
 } from "./types"
-import { openInEditor } from "bun"
 
 function applyGlobalProp<O extends Values<FilteredObjectConfigProps>>(obj: O) {
 	return Object.fromEntries(
@@ -207,8 +176,7 @@ export function setGlobalOption<
 	}
 	return success
 }
-type GetGlobalOptionValue<O extends keyof GlobalOptionsValues> =
-	GlobalOptions[O]["value"]
+type GetGlobalOptionValue<O extends keyof GlobalOptionsValues> = GlobalOptions[O]["value"]
 
 export function getVersion() {
 	return globalOptions.version
@@ -220,34 +188,28 @@ export function getGlobalOption<O extends keyof GlobalOptionsValues>(
 	return globalOptions[option].value
 }
 
-export function resetGlobalOptionsHandler() {
-	setState("configuring")
+export function resetGlobalOptionsHandler(prepareState = true) {
+	prepareState && setState("configuring")
 	resetGlobalOptions()
-	setState("ready")
+	prepareState && setState("ready")
 }
-
+export function logGlobalOptions() {
+	console.dir(globalOptions, { depth: null, colors: true })
+}
 function resetGlobalOptions(): void
-function resetGlobalOptions(
-	root: Record<string, any>,
-	objToSet: Record<string, any>,
-): void
-function resetGlobalOptions(
-	root?: Record<string, any>,
-	objToSet?: Record<string, any>,
-) {
+function resetGlobalOptions(root: Record<string, any>, objToSet: Record<string, any>): void
+function resetGlobalOptions(root?: Record<string, any>, objToSet?: Record<string, any>) {
 	root ??= globalOptionsDefault
 	objToSet ??= globalOptions
 	for (var [key, value] of Object.entries(root))
-		if (Object.hasOwn(objToSet, key) && Object.hasOwn(root, key))
-			if (typeof value === "object")
-				resetGlobalOptions(value, objToSet[key])
-			else (objToSet.value = root[key]), (objToSet.source = "original")
+		if (typeof value === "object") resetGlobalOptions(value, objToSet[key])
+		else {
+			objToSet[key].value = value
+			objToSet[key].source = "original"
+		}
 }
 
-type FilteredObjectProperties = FilterObjectProps<
-	GlobalOptions,
-	Record<string, GlobalOptionProp>
->
+type FilteredObjectProperties = FilterObjectProps<GlobalOptions, Record<string, GlobalOptionProp>>
 type CompareTable = {
 	0: { 0: 0; 1: -1; 2: -1 }
 	1: { 0: 1; 1: 0; 2: -1 }
@@ -268,9 +230,7 @@ export function comparePriorities<
 >(first: P1, second: P2): ComparePriorities<P1, P2> {
 	var p1: GlobalOptionPropPriorityLevel = normalizePriority(first),
 		p2: GlobalOptionPropPriorityLevel = normalizePriority(second)
-	return (
-		p1 === p2 ? 0 : p1 < p2 ? -1 : p1 > p2 ? 1 : 0
-	) as ComparePriorities<P1, P2>
+	return (p1 === p2 ? 0 : p1 < p2 ? -1 : p1 > p2 ? 1 : 0) as ComparePriorities<P1, P2>
 }
 
 type GetPriotiry<
@@ -315,19 +275,19 @@ export function normalizePriority<
  * @param type what value to return: `"string"`
  * @returns string represented value of the given priority (`"original"`|`"config"`|`"arguments"`)
  */
-export function normalizePriority<
-	P extends GlobalOptionPropPriorityString,
-	Type extends "string",
->(priority: P, type: Type): GetPriotiry<P, Type>
+export function normalizePriority<P extends GlobalOptionPropPriorityString, Type extends "string">(
+	priority: P,
+	type: Type,
+): GetPriotiry<P, Type>
 /**
  * @param priority what priority is coming in to test and get the value represented: `0`|`1`|`2`|`"original"`|`"config"`|`"arguments"`
  * @param type what value to return: `"number"`
  * @returns number represented value of the given priority (`0`|`1`|`2`)
  */
-export function normalizePriority<
-	P extends GlobalOptionPropPriorityLevel,
-	Type extends "number",
->(priority: P, type: Type): GetPriotiry<P, Type>
+export function normalizePriority<P extends GlobalOptionPropPriorityLevel, Type extends "number">(
+	priority: P,
+	type: Type,
+): GetPriotiry<P, Type>
 
 export function normalizePriority<
 	P extends GlobalOptionPropPriorityAll,
@@ -335,7 +295,7 @@ export function normalizePriority<
 >(priority: P, type = "number" as Type): GetPriotiry<P, Type> {
 	return (
 		hasNullable(type, priority)
-			? "config"
+			? "original"
 			: type === "string"
 				? typeof priority === "string"
 					? priority
@@ -356,9 +316,8 @@ export function getPriorityForOption<O extends keyof GlobalOptionsValues>(
 	return globalOptions[option]?.source ?? "original"
 }
 
-function createGlobalOptionObjectSetter<
-	O extends keyof FilteredObjectProperties,
->(object: O) {
+/** Creates a setter for global properties on object properties */
+function createGlobalOptionObjectSetter<O extends keyof FilteredObjectProperties>(object: O) {
 	/** Sets the global object property, and returns a boolean value representing status of the process (true=`success`, false=`failure`) */
 	return function <
 		K extends keyof FilteredObjectProperties[O],
@@ -371,7 +330,11 @@ function createGlobalOptionObjectSetter<
 		if (
 			!hasNullable(option, value, priority) &&
 			Object.hasOwn(globalOptions[object], option) &&
-			sameType(globalOptions[object][option], value)
+			comparePriorities(
+				(globalOptions[object]?.[option] as GlobalOptionProp).value,
+				priority,
+			) < 0 &&
+			sameType(globalOptions[object]?.[option], value)
 		) {
 			var optionObj = globalOptions[object][option] as GlobalOptionProp<V>
 
@@ -383,18 +346,22 @@ function createGlobalOptionObjectSetter<
 	}
 }
 
-function createGlobalOptionObjectGetter<
-	O extends keyof FilteredObjectProperties,
->(object: O) {
+/** Creates a getter for global properties on object properties */
+function createGlobalOptionObjectGetter<O extends keyof FilteredObjectProperties>(object: O) {
 	return function <P extends keyof FilteredObjectProperties[O]>(
 		option: P,
-	): GlobalOptions[O][P] extends GlobalOptionProp
-		? GlobalOptions[O][P]["value"]
-		: never {
+	): GlobalOptions[O][P] extends GlobalOptionProp ? GlobalOptions[O][P]["value"] : never {
 		return (globalOptions[object][option] as GlobalOptionProp).value
 	}
 }
 
+export function getGlobalObject<OBJ extends keyof FilteredObjectProperties>(
+	object: OBJ,
+): Readonly<FilteredObjectProperties[OBJ]> {
+	return globalOptions[object]
+}
+
+/** Universal function for setting global options on object options */
 export function setGlobalObjectOption<
 	OBJ extends keyof FilteredObjectProperties,
 	K extends keyof FilteredObjectProperties[OBJ],
@@ -410,14 +377,8 @@ export function setGlobalObjectOption<
 		typeof globalOptions[object] === "object" &&
 		!Array.isArray(globalOptions[object]) &&
 		Object.hasOwn(globalOptions[object], key) &&
-		sameType(
-			(globalOptions[object][key] as GlobalOptionProp<V>).value,
-			value,
-		) &&
-		comparePriorities(
-			(globalOptions[object][key] as GlobalOptionProp<V>).source,
-			priority,
-		) < 0
+		sameType((globalOptions[object][key] as GlobalOptionProp<V>).value, value) &&
+		comparePriorities((globalOptions[object][key] as GlobalOptionProp<V>).source, priority) < 0
 	) {
 		var obj = globalOptions[object][key] as GlobalOptionProp<V>
 		obj.value = value

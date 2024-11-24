@@ -1,10 +1,14 @@
+var terminalWidth = process.stdout.columns || 80
+
 export var helpFlags = [
-	"flags",
-	"log_options",
-	"timestamp_format",
-	"sections",
-] as const
-var terminalWidth = process.stdout.columns || 80,
+		"flags",
+		"log_options",
+		"timestamp_format",
+		"sections",
+	] as const,
+	isSmallScreen = terminalWidth < 91
+
+var flagsGap = 1,
 	optionsColumnWidth = 35 as const,
 	optionsLog: Section<string[], string> = new Map([
 		[["0"], "No logging"],
@@ -17,28 +21,30 @@ var terminalWidth = process.stdout.columns || 80,
 		[["g", "gif"], "GIF creation time / When GIF was in cache"],
 		[["p", "params"], "Request parameters"],
 		[["c", "cache"], "Info about cleanup the cache"],
+		[["cache"], "Info about cleanup the cache"],
 		[
 			["w", "watch"],
-			"Log all features that are enabled on startup/restart",
+			"inform when server restarted due to changes in cofnig file (watch global option needs to be enabled)",
 		],
 	]),
 	timestamps: Section<string, string> = new Map([
-		[`S`, "milliseconds (from last second)"],
-		[`s`, "seconds (from last minute)"],
-		[`m`, "minutes (from last hour)"],
+		[`u`, "microseconds"],
+		[`S`, "milliseconds "],
+		[`s`, "seconds"],
+		[`m`, "minutes"],
 		[`h`, "hours (24h format, 12:00, 13:00, 24:00, 01:00)"],
 		[`H`, "hours (12h format, 12 PM,  1 PM, 12 AM,  1 AM)"],
 		[`P`, "`AM`/`PM` indicator"],
-		[`d`, "day (of week)"],
+		[`d`, "day (3 first letters of the day of the week)"],
 		[`D`, "day (of month)"],
 		[`M`, "month (number)"],
 		[`N`, "month (3 first letters of the month name)"],
 		[`Y`, "year"],
 	]),
 	sections: Section<string, string> = new Map([
-		["flags", "Show all available flags"],
-		["log_options", "Show all available log options"],
-		["timestamp_format", "Show all available log options"],
+		["flags", "Show all available flags with extended descriptions"],
+		["log_options", "Show log options"],
+		["timestamp_format", "Show timestamp formating"],
 		["sections", "Show this message"],
 	])
 
@@ -56,7 +62,7 @@ if (process.argv[1].match(/help\.ts$/)) {
 	} else {
 		console.log(
 			warning(
-				`File ${green("@/src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
+				`File ${green("./src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
 			),
 		)
 		process.exit()
@@ -70,6 +76,13 @@ type Section<
 	T extends string | string[] = string,
 	V extends FlagRest = FlagRest,
 > = Map<T, V>
+
+/** SS = Small Screen for short
+ * return first value if screen is small. Else second
+ */
+export function ss<T, F>(ifTrue: T, ifFalse: F): T | F {
+	return isSmallScreen ? ifTrue : ifFalse
+}
 
 class FormatedOption {
 	#formated: string
@@ -93,7 +106,7 @@ class FormatedOption {
 }
 
 class CLIOption {
-	/** indentation for all options (leading characters) */
+	/** indentation for all options (leading characters) when terminal size is normal */
 	private static indent = "  " as const
 	private key = new FormatedOption("")
 	private props: string = ""
@@ -106,6 +119,9 @@ class CLIOption {
 		optionColumnWidth: number = optionsColumnWidth,
 		stdoutWidth: number = terminalWidth,
 	) {
+		optionColumnWidth =
+			optionColumnWidth - (isSmallScreen ? CLIOption.indent.length : 0)
+
 		this.keyWidth = optionColumnWidth
 		this.stdoutWidth = stdoutWidth
 		this.descriptionWidth = stdoutWidth - optionColumnWidth
@@ -128,8 +144,14 @@ class CLIOption {
 
 	build() {
 		var propsText = this.props ? ` ${this.props}` : "",
-			fullKey = CLIOption.indent + this.key.value.formated + propsText,
-			fullKeyRaw = CLIOption.indent + this.key.value.raw + propsText,
+			fullKey =
+				(isSmallScreen ? "" : CLIOption.indent) +
+				this.key.value.formated +
+				propsText,
+			fullKeyRaw =
+				(isSmallScreen ? "" : CLIOption.indent) +
+				this.key.value.raw +
+				propsText,
 			fullKeyPadValue = this.keyWidth + 1 - fullKeyRaw.length,
 			fullKeyPad = " ".repeat(fullKeyPadValue < 0 ? 0 : fullKeyPadValue),
 			readyLines = this.wrapText(this.descriptionText).map(
@@ -160,15 +182,18 @@ class CLIOption {
 			currentLineLen = 0
 		for (var i = 0; i < words.length; i++) {
 			if (
-				currentLineLen + rawWords[i].length + 1 >=
+				currentLineLen +
+					(currentLine ? 1 : 0) +
+					rawWords[i].length +
+					+!isSmallScreen >=
 				this.descriptionWidth
 			) {
 				lines.push(currentLine)
 				currentLine = words[i]
-				currentLineLen = 0
+				currentLineLen = rawWords[i].length
 			} else {
 				currentLine += (currentLine ? " " : "") + words[i]
-				currentLineLen += rawWords[i].length + (currentLine ? 1 : 0)
+				currentLineLen += (currentLine ? 1 : 0) + rawWords[i].length
 			}
 		}
 		if (currentLine || lines.length === 0) lines.push(currentLine)
@@ -186,15 +211,23 @@ class CLISection<Name extends string> {
 		this.PS = postScriptum
 	}
 	print() {
+		var out = ""
+		for (var option of this.options) out += `${option.build().string}\n`
+		for (var ps of this.PS) out += `${ps}\n`
 		console.log(`${green(this.name)}:`)
-		for (var option of this.options) console.log(option.build().string)
-		for (var ps of this.PS) console.log(ps)
+		console.log(out.slice(0, -1))
 	}
 }
 
 function formatOptions(optionList: string[]): FormatedOption {
 	return new FormatedOption(
-		`${(optionList.every((e) => e.includes("--")) ? ((optionList[0] = `    ${optionList[0]}`), optionList) : optionList).map(green).join(", ")}`,
+		`${(optionList.every((e) => /[a-zA-Z]{2,}/.test(e))
+			? ((optionList[0] = `${`  ${ss(optionList[0].includes("-") ? " " : "", " ")}${ss("", " ".repeat(flagsGap - +!optionList[0].includes("-")))}`}${optionList[0]}`),
+				optionList)
+			: optionList
+		)
+			.map(green)
+			.join(ss(",", `,${" ".repeat(flagsGap)}`))}`,
 	)
 }
 
@@ -230,7 +263,6 @@ function createCLISection<Name extends string>(
 function printFlags(extended = false) {
 	createCLISection(
 		"FLAGS",
-
 		(() => {
 			setupFlagHandlers()
 			return flagObjects.reduce((a, c) => {
@@ -253,9 +285,8 @@ function printFlags(extended = false) {
 				return a
 			}, new Map<string[], FlagRest>())
 		})(),
-
 		[
-			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LCAWEt")}'`,
+			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LAWEt")}'`,
 		],
 	).print()
 }
@@ -265,9 +296,9 @@ function printLogOptions() {
 		"LOG OPTIONS",
 		optionsLog,
 		[
-			`To select custom properties, use coma to separate them. Ex: '${green("-l r,g,p,c,w")}'`,
+			`To select specific features, use coma to separate them. Ex: '${green("-l r,g,p,c,w")}', or specify the level of logging. Ex: '${green("-l 3")}'`,
 		],
-		25,
+		13,
 	).print()
 }
 
@@ -278,16 +309,17 @@ function printTimespampOptions() {
 		[
 			"\nExamples:",
 			`'${green("s:m:h D.M.Y")}' - seconds:minutes:hours day(of month).month(number).year`,
-			`'${green("Y N d m:h")}' - year month(3 first letters of name) day(of week) minutes:hours`,
-			`'${green("s/m/h")}' - seconds/minutes/hours`,
-			`'${green("m:h")}' -  minutes:hours`,
+			`'${green("Y N d m:h")}'   - year month(3 first letters of the month name) day(first 3 letters of the day of the week) minutes:hours`,
+			`'${green("m:s:S.u")}      - minutes:seconds:milliseconds.microseconds`,
+			`'${green("s/m/h")}'       - seconds/minutes/hours`,
+			`'${green("m:h")}'         - minutes:hours`,
 		],
 		9,
 	).print()
 }
 
 function printSections() {
-	createCLISection("SECTIONS", sections).print()
+	createCLISection("SECTIONS", sections, [], 20).print()
 }
 
 export default function main(section?: (typeof helpFlags)[number]) {
@@ -313,6 +345,6 @@ export default function main(section?: (typeof helpFlags)[number]) {
 
 	!section &&
 		console.log(
-			`\nYou can watch a spesific section of the help page by running '${green("bun start -h/--help {SECTION_NAME}")}' or '${green("bun run help {SECTION_NAME}")}'\nAvailable sections: ${helpFlags.map(green).join(", ")}`,
+			`\nYou can watch a spesific section of the help page by running '${green("bun start -h/--help {section}")}' or '${green("bun run help {section}")}'\nAvailable sections: ${helpFlags.map(green).join(", ")}`,
 		)
 }

@@ -3,7 +3,6 @@ fileNotForRunning()
 import type { logLevel } from "./config"
 import type { Avatar, PetPet } from "./db"
 import { fileNotForRunning } from "./functions"
-import type { helpFlags } from "./help"
 
 // ---- Utility types ----
 
@@ -11,33 +10,29 @@ export type ANSIRGB<
 	R extends number = number,
 	G extends number = number,
 	B extends number = number,
-> = `${"38" | "48"};2;${R};${G};${B}`
+	T extends "fg" | "bg" = "fg" | "bg",
+> = `${T extends "fg" ? "38" : "48"};2;${R};${G};${B}`
 
 /** Promise that always resolve a value without any failures */
 export type AlwaysResolvingPromise<T> = Omit<Promise<T>, "catch" | "then"> & {
-	then<TResult = T>(
-		callback?: (value: T) => TResult | PromiseLike<TResult>,
-	): AlwaysResolvingPromise<TResult>
+	then<TResult = T>(callback?: (value: T) => TResult | PromiseLike<TResult>): Promise<TResult>
 }
 
 /** Returns values of the object */
 export type Values<T extends Record<any, any>> = T[keyof T]
 
 /** Returns index of given element as a number literal, or `never` */
-export type IndexOf<
-	T extends readonly any[],
-	U,
-	Acc extends readonly any[] = [],
-> = T extends [infer First, ...infer Rest]
+export type IndexOf<T extends readonly any[], U, Acc extends readonly any[] = []> = T extends [
+	infer First,
+	...infer Rest,
+]
 	? First extends U
 		? Acc["length"]
 		: IndexOf<Rest, U, [...Acc, any]>
 	: never
 /** Make all object's props optional, and do it recursively */
 export type PartialAllObjectsProps<O extends Record<any, any>> = {
-	[K in keyof O]?: O[K] extends Record<any, any>
-		? PartialAllObjectsProps<O[K]>
-		: O[K]
+	[K in keyof O]?: O[K] extends Record<any, any> ? PartialAllObjectsProps<O[K]> : O[K]
 }
 
 /** Exclude `key: value` pairs, value's type of which is specified  */
@@ -52,9 +47,7 @@ export type FilterObjectProps<O extends Record<any, any>, T = never> = {
 
 /** Pick last type in a Union type */
 export type Last<T> = (
-	(T extends any ? (x: () => T) => void : never) extends (x: infer I) => void
-		? I
-		: never
+	(T extends any ? (x: () => T) => void : never) extends (x: infer I) => void ? I : never
 ) extends () => infer U
 	? U
 	: never
@@ -65,10 +58,10 @@ export type UnionToTuple<T, A extends any[] = []> = [T] extends [never]
 	: UnionToTuple<Exclude<T, Last<T>>, [Last<T>, ...A]>
 
 /** Join strings with a separator */
-export type Join<
-	Tuple extends string[],
-	Separator extends string = "",
-> = Tuple extends [infer First extends string, ...infer Rest extends string[]]
+export type Join<Tuple extends string[], Separator extends string = ""> = Tuple extends [
+	infer First extends string,
+	...infer Rest extends string[],
+]
 	? Rest["length"] extends 0
 		? First
 		: `${First}${Separator}${Join<Rest, Separator>}`
@@ -95,10 +88,7 @@ export type GlobalOptionProp<T = any> = {
 	source: GlobalOptionPropPriorityString
 }
 
-export type GlobalOptionsValues = ExcludeObjectProps<
-	AllGlobalConfigOptions,
-	Record<string, any>
->
+export type GlobalOptionsValues = ExcludeObjectProps<AllGlobalConfigOptions, Record<string, any>>
 type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 	[K in keyof O]: O[K] extends Record<string, any>
 		? ApplyGlobalOptionPropTypeRecursively<O[K]>
@@ -108,26 +98,28 @@ type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 export type BaseConfigOptions = {
 	/** Cache avatars to reduce amount of requests to get them (default=`true`) */
 	avatars: boolean
+	/** Enable microseconds notation in milliseconds values, and milliseconds notation in minutes (default=`false`) */
+	accurateTime: boolean
 	/** Store cache or not (default=`true`) */
 	cache: boolean
 	/** How often to check cached gifs after last request (default=`60_000` ms, `1` min) */
 	cacheCheckTime: number
-	/** How long to cache gifs (default=`900_000` ms, `15` min) */
+	/** How long to cache GIFs (default=`900_000` ms, `15` min) */
 	cacheTime: number
-	/** Config file (if exist). `"default"` means no config file, use default values. Hierarchy: `"config.toml"` > `".env"` > `"default"` */
-	configFile: "config.toml" | ".env" | "default"
-	/** Cache type. `"code"` - store cache in code itself, `"fs"` - in filesystem, `"both"` - both types together (default=`"in-code"`)*/
+	/** Cache type. `"code"` - store cache in code itself, `"fs"` - in filesystem, `"both"` - both types together (default=`"code"`)*/
 	cacheType: "code" | "fs" | "both"
+	/** Use compression to store all cache in code in compressed format or not (default=`true`) */
+	compression: boolean
 	/** Log errors during runtime (default=`true`) */
 	errors: boolean
 	/** Show what log features are enabled (default=`false`) */
 	logFeatures: boolean
 	/** Options for logging (all default=`false`):
-	 * `rest` - log requests and responses
-	 * `gif` - log gif creation time & when gif was in cache
+	 * `rest`   - log requests and responses
+	 * `gif`    - log gif creation time & when gif was in cache
 	 * `params` - log each gif requesr params
-	 * `cache` - log cache related things (perform, cleanup, info, etc.)
-	 *  `watch` - log when server restarted (`watch` option needs to be enabled)
+	 * `cache`  - log cache related things (perform, cleanup, info, etc.)
+	 * `watch`  - log when server restarted due to changes in config file (`watch` option needs to be enabled)
 	 */
 	logOptions: LogOptions
 	/** Store cache permanent (without checks) (default=`false`) */
@@ -142,25 +134,36 @@ export type BaseConfigOptions = {
 	/** Include timestamps in all logging stuff (default=`false`) */
 	timestamps: boolean
 	/** Format for the timestamps represented with a string with formating characters (default=`"h:m:s D.M.Y"`)
-	 * `S` = milliseconds (from last second)
-	 * `s` = seconds (from last minute)
-	 * `m` = minutes (from last hour)
-	 * `h` = hours (24h format, 12:00, 13:00, 24:00, 01:00)
-	 * `H` = hours (12h format, 12 PM,  1 PM, 12 AM,  1 AM)
-	 * `P` = `AM`/`PM` indicator
-	 * `d` = day (of week)
-	 * `D` = day (of month)
-	 * `M` = month (number)
-	 * `N` = month (3 first letters of the month name)
-	 * `Y` = year
 	 *
+	 * | format | description                                    |
+	 * |:------:|:-----------------------------------------------|
+	 * |   u    | microseconds                                   |
+	 * |   S    | milliseconds                                   |
+	 * |   s    | seconds                                        |
+	 * |   m    | minutes                                        |
+	 * |   h    | hours (24h format, 12:00, 13:00, 24:00, 01:00) |
+	 * |   H    | hours (12h format, 12 PM,  1 PM, 12 AM,  1 AM) |
+	 * |   P    | `AM`/`PM` indicator                                |
+	 * |   d    | day (first 3 letters of the day of the week)   |
+	 * |   D    | day (of month)                                 |
+	 * |   M    | month (number)                                 |
+	 * |   N    | month (3 first letters of the month name)      |
+	 * |   Y    | year |
+	 *
+	 * _Note!_ To escape some character that are listed in formating - use backslash symbol `\` before character (you would probably need second one, to escape the escape character like `\n`, `\t` or others depending on where you write the format).
+	 * _Note!_ `microseconds` are obtained with the high precision time in milliseconds from the script start time, which has a part after period, that indicates microseconds. So it's probably not syncronized with the computer's clock time, but it can be used as a timestamp in the time.
 	 * *Examples*:
-	 * "s:m:h D.M.Y" = "seconds:minutes:hours day(of month).month(number).year"
-	 * "Y N d m:h" = "year month(3 first letters of name) day(of week) minutes:hours"
-	 * "s/m/h" = "seconds/minutes/hours"
-	 * "m:h" = "minutes:hours"
+	 * | format        | description                                                                                             |
+	 * |:--------------|:--------------------------------------------------------------------------------------------------------|
+	 * | "s:m:h D.M.Y" | `seconds:minutes:hours day(of month).month(number).year`                                                  |
+	 * | "Y N d m:h"   | `year month(3 first letters of the month name) day(first 3 letters of the day of the week) minutes:hours` |
+	 * | "m:s:S.u"     | `minutes:seconds:milliseconds.microseconds`                                                               |
+	 * | "s/m/h"       | `seconds/minutes/hours`                                                                                   |
+	 * | "m:h"         | `minutes:hours`                                                                                           |
 	 */
 	timestampFormat: string
+	/** Show full errors on each error during runtime */
+	verboseErrors: boolean
 	/** Log warnings during runtime (default=`true`) */
 	warnings: boolean
 	/** Watch the configuration files, and rerun the server on change (default=`false`) */
@@ -188,18 +191,15 @@ export type GlobalOptions = {
 
 // ----- Log Options -----
 
-export type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> =
-	O extends LogLevel
-		? (typeof logLevel)[O]
-		: O extends LogOptionShort
-			? {
-					[K in keyof LogOptions]: K extends `${O}${string}`
-						? K
-						: never
-				}[keyof LogOptions]
-			: O extends LogOptionLong
-				? O
-				: never
+export type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> = O extends LogLevel
+	? (typeof logLevel)[O]
+	: O extends LogOptionShort
+		? {
+				[K in keyof LogOptions]: K extends `${O}${string}` ? K : never
+			}[keyof LogOptions]
+		: O extends LogOptionLong
+			? O
+			: never
 
 export type LogOption = LogString | LogLevel
 export type LogOptions<
@@ -234,10 +234,7 @@ export type LogOptionShort = {
 
 // ----- Server options -----
 
-export type ServerOptions<
-	P extends number = number,
-	H extends string = string,
-> = {
+export type ServerOptions<P extends number = number, H extends string = string> = {
 	/** Server port to run on (default=`3000`) */
 	port: P
 	/** Server host to run on (default=`"localhost"`) */
@@ -249,10 +246,7 @@ export type ServerOptions<
 export type FlagValue = "none" | "optional" | "required"
 export type FlagValueArray = ("required" | "optional")[]
 export type FlagValueForArray = "optional" | "required"
-export type FlagValueUnion =
-	| FlagValue
-	| FlagValueArray
-	| Readonly<FlagValueArray>
+export type FlagValueUnion = FlagValue | FlagValueArray | Readonly<FlagValueArray>
 
 export type FlagParameterType = {
 	required: `<${string}>`
@@ -288,9 +282,7 @@ type FlagParameter<T extends FlagValueUnion> = T extends FlagValue
 				? FlagParameterType["required"]
 				: T[K] extends "optional"
 					? FlagParameterType["optional"]
-					:
-							| FlagParameterType["required"]
-							| FlagParameterType["optional"]
+					: FlagParameterType["required"] | FlagParameterType["optional"]
 		}
 
 export type Flag<T extends FlagValueUnion> = {
@@ -305,27 +297,36 @@ export type Flag<T extends FlagValueUnion> = {
 
 // ----- Params -----
 
-export type LogDependency =
-	| "info"
-	| "error"
-	| "warning"
-	| LogLevel
-	| LogOptionLongCombination
+export type LogDependency = "info" | "error" | "warning" | LogLevel | LogOptionLongCombination
 
 export type ChechValidParamsParam = {
-	userID: string
 	shift?: string
 	resize?: string
 	size?: string
 	fps?: string
 	squeeze?: string
 }
+
+export type Resolve<T = any> = (value: T | PromiseLike<T>) => void
+
 // ------ Gifs/Images ------
 
 /** Object for configuring cache in code and filesystem */
 export type Cache = {
 	/** Cache configuration for GIFs */
 	gif: {
+		/** Operations with queue */
+		queue: {
+			/** Add the generation task to queue with fething avatar */
+			addWithAvatar: (hash: Hash, params: PetPetParams, size?: number) => Promise<Uint8Array>
+			/** Add the generation task to queue */
+			add: (hash: Hash, gif: Uint8Array, params: PetPetParams) => Promise<Uint8Array>
+			/** Check if generation task is in the queue */
+			has: (hash: Hash) => boolean
+			/** Get the promise with GIF generation task */
+			get: (hash: Hash) => Promise<Uint8Array> | undefined
+		}
+
 		/** Cache configuration for GIFs in code */
 		code: {
 			/** Sets the PetPet object to map and returns result of the operation as a boolean */
@@ -335,38 +336,50 @@ export type Cache = {
 			/** Checks if PetPet object exists in map */
 			has: (hash: Hash) => boolean
 			/** Deletes the PetPet object from map and returns result of the operation as a booleana (`true` = success, `false` = failure) */
-			delete: (hash: Hash) => boolean
+			remove: (hash: Hash) => boolean
 			/** Chechs if PetPet object with given hash exeeded cache time (`true` = exeeded, `false` = not exeeded) */
 			checkCacheTime: (hash: Hash) => boolean
+			/** Array of all hashes in cache */
+			hashes: Array<Hash>
+			/** Clear the cache from all PetPet objects, and return a number of how many were deleted */
+			clear: () => number
 		}
 		/** Cache configuration for GIFs in filesystem */
 		fs: {
-			/** Writes the GIF and JSON files to the `@/cache/gif` directory and returns an always-resolving promise with result of the operation (`true` = success, `false` = failure)
+			/** Writes the GIF and JSON files to the `./cache/gif` directory and returns an always-resolving promise with result of the operation (`true` = success, `false` = failure)
 			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise with result of the operation (`true` = success, `false` = failure) */
-			set: (
-				id: string,
-				has: Hash,
-				lastSeen: number,
-				gif: Buffer,
-			) => AlwaysResolvingPromise<boolean>
-			/** Reads the `@/cache/gif` directory, checks if GIF file with given hash exists, and returns an always-resolving promise with the result
+			set: (petpet: PetPet) => AlwaysResolvingPromise<boolean>
+			/** Reads the `./cache/gif` directory, checks if GIF file with given hash exists, and returns an always-resolving promise with the result
 			 * @returns {AlwaysResolvingPromise<Buffer | undefined>} Always-resolving Promise with result */
-			get: (hash: Hash) => AlwaysResolvingPromise<Buffer | undefined>
-			/** Checks the `@/cache/gif` directory, and if GIF with given hash exists - returns an always-resolving promise as a result
-			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise result */
-			has: (hash: Hash) => AlwaysResolvingPromise<boolean>
-			/** Removes the GIF and JSON files from `@/cache/gif` directory and returns result of the operation as a booleana (`true` = success, `false` = failure)
+			get: (hash: Hash) => AlwaysResolvingPromise<Uint8Array | undefined>
+			/** Checks the `./cache/gif` directory for a GIF with given hash */
+			has: (hash: Hash) => boolean
+			/** Removes the GIF and JSON files from `./cache/gif` directory and returns result of the operation as a booleana (`true` = success, `false` = failure)
 			 * @returns {boolean} result of the operation (`true` = success, `false` = failure) */
-			delete: (hash: Hash) => boolean
-			/** Reands `@/cache/gif` directory, checks if JSON file with given hash exists, reads the file, and checks if timestamp exeeded cache time (`true` = exeeded, `false` = not exeeded)
+			remove: (hash: Hash) => boolean
+			/** Reands `./cache/gif` directory, checks if JSON file with given hash exists, reads the file, and checks if timestamp exeeded cache time (`true` = exeeded, `false` = not exeeded)
 			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise with the result (`true` = exeeded, `false` = not exeeded) */
 			checkCacheTime: (hash: Hash) => AlwaysResolvingPromise<boolean>
-			/** Reands `@/cache/gif` directory, and checks if both GIF and JSON files with given hash exists (`true` = exists, `false` = one/both files does not exist) */
+			/** Reands `./cache/gif` directory, and checks if both GIF and JSON files with given hash exists (`true` = exists, `false` = one/both files does not exist) */
 			checkSafe: (hash: Hash) => boolean
+			/** Array of all hashes in cache */
+			hashes: Array<Hash>
+			/** Clear the cache from all GIFs and JSON files, and return a number of how many were deleted (pairs: GIF + JSON)
+			 * @returns {number} Amount of deleted `GIF + JSON` pairs */
+			clear: () => number
 		}
 	}
 	/** Cache configuration for avatars */
 	avatar: {
+		/** Operations with queue */
+		queue: {
+			/** Add the fetch task promise to the queue, and return this task */
+			add: (id: string, size?: number) => Promise<Uint8Array>
+			/** Check if fetching task is in the queue */
+			has: (id: string) => boolean
+			/** Get the promise with avatar fetching process */
+			get: (id: string) => Promise<Uint8Array> | undefined
+		}
 		/** Cache configuration for avatars in code */
 		code: {
 			/** Sets the Avatar object to map and returns result of the operation as a boolean (`true` = success, `false` = failure)*/
@@ -376,52 +389,99 @@ export type Cache = {
 			/** Checks if Avatar object exists in map */
 			has: (id: string) => boolean
 			/** Deletes the Avatar object from map and returns result of the operation as a booleana (`true` = success, `false` = failure) */
-			delete: (id: string) => boolean
+			remove: (id: string) => boolean
 			/** Chechs if GIFs in code cache needs this avatar or not (`true` = needs, `false` = not needs) */
 			checkDependencies: (id: string) => boolean
+			/** Array of all IDs in cache */
+			IDs: Array<string>
+			/** Clear the cache from all Avatar objects, and return a number of how many were deleted */
+			clear: () => number
 		}
 		/** Cache configuration for avatars in filesystem */
 		fs: {
-			/** Writes the PNG files to the `@/cache/avatar` directory and returns an always-resolving promise with result of the operation (`true` = success, `false` = failure)
+			/** Writes the PNG files to the `./cache/avatar` directory and returns an always-resolving promise with result of the operation (`true` = success, `false` = failure)
 			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise with result of the operation (`true` = success, `false` = failure) */
-			set: (id: string, avatar: Buffer) => AlwaysResolvingPromise<boolean>
-			/** Reads the `@/cache/avatar` directory, checks if PNG file with given id exists, and returns an always-resolving promise with the result
+			set: (avatar: Avatar) => AlwaysResolvingPromise<boolean>
+			/** Reads the `./cache/avatar` directory, checks if PNG file with given id exists, and returns an always-resolving promise with the result
 			 * @returns {AlwaysResolvingPromise<Buffer | undefined>} Always-resolving Promise with result */
-			get: (id: string) => AlwaysResolvingPromise<Buffer | undefined>
-			/** Checks the `@/cache/avatar` directory, and if PNG with given id exists - returns an always-resolving promise as a result
-			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise with result */
-			has: (id: string) => AlwaysResolvingPromise<boolean>
-			/** Removes the PNG files from `@/cache/avatar` directory and returns result of the operation as a booleana (`true` = success, `false` = failure)
+			get: (id: string) => AlwaysResolvingPromise<Uint8Array | undefined>
+			/** Checks the `./cache/avatar` directory, and if PNG with given id exists - returns an always-resolving promise as a result */
+			has: (id: string) => boolean
+			/** Removes the PNG files from `./cache/avatar` directory and returns result of the operation as a booleana (`true` = success, `false` = failure)
 			 * @returns {boolean} result of the operation (`true` = success, `false` = failure) */
-			delete: (id: string) => boolean
-			/** Reands `@/cache/gif` directory, and checks if GIF file with given id in it's name exists (`true` = needs, `false` = not needs)
+			remove: (id: string) => boolean
+			/** Reands `./cache/gif` directory, and checks if GIF file with given id in it's name exists (`true` = needs, `false` = not needs)
 			 * @returns {AlwaysResolvingPromise<boolean>} Always-esolving Promise with the result (`true` = needs, `false` = not needs) */
 			checkDependencies: (id: string) => AlwaysResolvingPromise<boolean>
+			/** Array of all IDs in cache */
+			IDs: Array<string>
+			/** Clear the cache from all PNG files, and return a number of how many were deleted
+			 * @returns {number} Amount of deleted `PNG` files */
+			clear: () => number
 		}
 	}
 }
 
-export type HashPart = string | undefined
+export type Stats = {
+	cache: {
+		readonly type: AllGlobalConfigOptions["cacheType"]
+		gif: {
+			readonly inCache: number
+			readonly processing: number
+		}
+		avatar: {
+			readonly inCache: number
+			readonly processing: number
+		}
+	}
+	request: {
+		routes: string[]
+	}
+	response: {
+		average: {
+			readonly fromScratch: number
+			readonly fromCache: number
+		}
+		routes: {
+			"/:id": {
+				successful: number
+				failed: number
+				total: number
+			}
+			"/avatar/:id": {
+				successful: number
+				failed: number
+				total: number
+			}
+		}
+		successful: number
+		failed: number
+		total: number
+	}
+}
 
+export type HashPart = string
+export type HashTwoParameters = `${string}x${string}`
+export type UID = string
 export type Hash =
-	`${string}-${HashPart}-${HashPart}-${HashPart}-${HashPart}-${HashPart}`
+	`${UID}-${HashTwoParameters}-${HashTwoParameters}-${HashPart}-${HashPart}-${HashPart}`
 
 export type PetPetType = {
 	hash: Hash
 	id: string
 	lastSeen: number
-	gif: Buffer
+	gif: Uint8Array
 }
 
 export type AvatarType = {
-	avatar: Buffer
+	avatar: Uint8Array
 	id: string
 }
 
 export type PetPets = Map<Hash, PetPet>
 export type Avatars = Map<string, Avatar>
-export type AvatarQueue = Map<string, Promise<Buffer>>
-export type PetPetQueue = Map<Hash, Promise<Buffer>>
+export type AvatarQueue = Map<string, Promise<Uint8Array>>
+export type PetPetQueue = Map<Hash, Promise<Uint8Array>>
 
 export type PetPetParams = {
 	/** Shift the base image by `X` pixels on the X axis (horizontal) (default=`0`px) */
@@ -445,15 +505,9 @@ export type PetPetParams = {
 
 export type TOMLConfig = PartialAllObjectsProps<BaseConfigOptions>
 
-export type TOMLEntries = [
-	keyof BaseConfigOptions,
-	BaseConfigOptions[keyof BaseConfigOptions],
-][]
+export type TOMLEntries = [keyof BaseConfigOptions, BaseConfigOptions[keyof BaseConfigOptions]][]
 
-export type FilterConfigOptionsByType<T> = FilterObjectProps<
-	BaseConfigOptions,
-	T
->
+export type FilterConfigOptionsByType<T> = FilterObjectProps<BaseConfigOptions, T>
 
 export type FilteredBooleanConfigProps = FilterConfigOptionsByType<boolean>
 export type FilteredStringConfigProps = FilterConfigOptionsByType<string>
