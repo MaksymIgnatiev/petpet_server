@@ -95,19 +95,6 @@ export async function generatePetPet(
 				),
 				extractWidth = Math.min(newWidth, handGifDimensions.width),
 				extractHeight = Math.min(newHeight, handGifDimensions.height)
-			console.log(
-				formatObj({
-					newWidth,
-					newHeight,
-					totalShiftY,
-					centerY,
-					progress,
-					extractTop,
-					extractLeft,
-					extractWidth,
-					extractHeight,
-				}),
-			)
 			return sharp(avatar)
 				.resize({
 					width: newWidth,
