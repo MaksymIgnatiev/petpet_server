@@ -5,7 +5,7 @@ import sharp from "sharp"
 import { GifCodec, GifFrame, GifUtil, BitmapImage } from "gifwrap"
 
 import type { PetPetParams } from "./types"
-import { fileNotForRunning } from "./functions"
+import { fileNotForRunning, green } from "./functions"
 import { ROOT_PATH } from "./config"
 
 var sharpBlankImageOpts = { r: 0, g: 0, b: 0, alpha: 0 },
@@ -16,15 +16,21 @@ var sharpBlankImageOpts = { r: 0, g: 0, b: 0, alpha: 0 },
 	handGifDimensions: { width: number; height: number },
 	r = Math.round.bind(Math)
 
-Bun.file(join(ROOT_PATH, "/assets/hand.gif"))
+Bun.file(join(ROOT_PATH, "assets", "hand.gif"))
 	.arrayBuffer()
 	.then((arrBuffer) => {
 		GifUtil.read(Buffer.from(arrBuffer)).then((gif) => {
-			handFrames = gif.frames.filter((_, i) => !(i % 2))
+			handFrames = gif.frames
 			FrameCount = handFrames.length
 			handGifDimensions = { width: gif.width, height: gif.height }
 		})
 	})
+
+function formatObj(obj: Record<string, any>) {
+	var result = []
+	for (var [key, value] of Object.entries(obj)) result.push(`${green(key)}: ${value}`)
+	return result.join(", ")
+}
 
 export var defaultPetPetParams: {
 	+readonly [K in keyof PetPetParams]-?: PetPetParams[K]
@@ -32,11 +38,22 @@ export var defaultPetPetParams: {
 	shiftX: 0,
 	shiftY: 0,
 	size: 90,
-	fps: 1,
+	fps: 16,
 	resizeX: 0,
 	resizeY: 0,
 	squeeze: 10,
 } as const
+
+/** Get the progress of the GIF frame by frame providing an index of the frame
+ * Each value represents a multiplyer to the `squeeze` value */
+function getProgress(index: number) {
+	if (index === 0) return 0.1
+	else if (index === 1) return 0.5
+	else if (index === 2) return 1
+	else if (index === 3) return 0.9
+	else if (index === 4) return 0.2
+	else return 0
+}
 
 export async function generatePetPet(
 	avatar: Uint8Array,
@@ -57,21 +74,40 @@ export async function generatePetPet(
 		gifCodec = new GifCodec(),
 		baseShift = 1,
 		expansionFactor = 0.5,
+		// help me. I can't create the right logic 💀
 		framesPromises = Array.from({ length: FrameCount }, async (_, i) => {
 			// Logic for every frame in form of promise
 			var m = Math.floor(FrameCount / 2),
-				progress = r((1 - Math.abs(i - m) / m) * squeeze),
+				progress = r(getProgress(i) * squeeze),
 				needShift = i > m,
 				shiftBase = needShift ? baseShift : 0,
 				handOffsetY = progress,
-				newWidth = r(size + resizeX / 2 + progress * expansionFactor),
-				newHeight = r(size + resizeY / 2 - progress * 2),
+				newWidth = r(size + resizeX + progress * expansionFactor),
+				newHeight = r(size + resizeY - progress * 2),
 				totalShiftX = shiftX,
 				totalShiftY = shiftY + progress,
 				centerX = r((handGifDimensions.width - newWidth) / 2),
 				centerY = r((handGifDimensions.height - newHeight) / 2),
-				handFrame = handFrames[i]
-			console.log({ centerY, centerX, shiftBase, progress })
+				handFrame = handFrames[i],
+				extractTop = r(centerY < 0 ? Math.max(Math.abs(centerY) - progress, 0) : 0),
+				extractLeft = r(
+					Math.max(centerX < 0 ? Math.max(Math.abs(centerX) - shiftBase, 0) : 0, 0),
+				),
+				extractWidth = Math.min(newWidth, handGifDimensions.width),
+				extractHeight = Math.min(newHeight, handGifDimensions.height)
+			console.log(
+				formatObj({
+					newWidth,
+					newHeight,
+					totalShiftY,
+					centerY,
+					progress,
+					extractTop,
+					extractLeft,
+					extractWidth,
+					extractHeight,
+				}),
+			)
 			return sharp(avatar)
 				.resize({
 					width: newWidth,
@@ -80,14 +116,10 @@ export async function generatePetPet(
 					fit: "fill",
 				})
 				.extract({
-					left: Math.max(centerX < 0 ? Math.max(Math.abs(centerX) - shiftBase, 0) : 0, 0),
-					top: (() => {
-						var result = centerY < 0 ? Math.abs(Math.abs(centerY) - progress) : 0
-						console.log({ result })
-						return result
-					})(),
-					width: Math.min(newWidth, handGifDimensions.width),
-					height: Math.min(newHeight, handGifDimensions.height),
+					left: extractLeft,
+					top: extractTop,
+					width: extractWidth,
+					height: extractHeight,
 				})
 				.toBuffer()
 				.then((baseImage) =>
@@ -102,7 +134,7 @@ export async function generatePetPet(
 						.composite([
 							{
 								input: baseImage,
-								top: Math.max(centerY, 0) + totalShiftY,
+								top: centerY < 0 ? 0 : centerY + totalShiftY,
 								left: Math.max(centerX + shiftBase, 0) + totalShiftX,
 							},
 							{
