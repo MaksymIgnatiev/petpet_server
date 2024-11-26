@@ -75,7 +75,7 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		cache: true,
 		cacheType: "code",
 		compression: true,
-		clearOnRestart: true,
+		clearOnRestart: false, // true
 		config: false,
 		errors: true,
 		logFeatures: false,
@@ -102,7 +102,8 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 	/** Absolute path to the root of the project */
 	ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), "../"),
 	priorityLevel = ["original", "config", "arguments"] as const,
-	logLevel = ["rest", "gif", "params", "cache", "watch"] as const
+	logLevel = ["rest", "gif", "params", "cache", "watch"] as const,
+	cacheType = ["code", "fs", "both"] as const
 
 var globalOptions: GlobalOptions = new Config(),
 	stateList = ["configuring", "ready"] as const,
@@ -350,18 +351,17 @@ function createGlobalOptionObjectSetter<O extends keyof FilteredObjectProperties
 			: never,
 		P extends GlobalOptionPropPriorityAll,
 	>(option: K, value: V, priority: P) {
-		var success = true
+		var success = false
 		if (
 			!hasNullable(option, value, priority) &&
 			Object.hasOwn(globalOptions[object], option) &&
 			comparePriorities(
-				(globalOptions[object]?.[option] as GlobalOptionProp).value,
+				(globalOptions[object]?.[option] as GlobalOptionProp<V>).value,
 				priority,
 			) < 0 &&
-			sameType(globalOptions[object]?.[option], value)
+			sameType((globalOptions[object]?.[option] as GlobalOptionProp<V>).value, value)
 		) {
 			var optionObj = globalOptions[object][option] as GlobalOptionProp<V>
-
 			optionObj.value = value
 			optionObj.source = normalizePriority(priority, "string")
 			success = true

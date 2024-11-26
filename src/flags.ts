@@ -1,24 +1,29 @@
 fileNotForRunning()
 
 import {
-	enterAlternateBuffer,
 	error,
 	fileNotForRunning,
 	formatDate,
 	green,
 	isStringNumber,
+	memoize,
+	normalizeLogOption,
+	parseLogOption,
 } from "./functions"
 import {
 	getGlobalOption,
 	getServerOption,
 	getVersion,
 	globalOptionsDefault,
+	logGlobalOptions,
+	setGlobalConfigOption,
 	setGlobalOption,
+	setLogOption,
 	setServerOption,
 	setState,
 } from "./config"
 import printHelp, { helpFlags, ss } from "./help"
-import type { Flag, FlagValueArray, FlagValueUnion } from "./types"
+import type { Flag, FlagValueArray, FlagValueUnion, LogLevel } from "./types"
 import { genConfig } from "./genConfig"
 
 var flagRegex = /^-([a-zA-Z]|-[a-z\-]+)$/,
@@ -155,8 +160,39 @@ export function setupFlagHandlers() {
 			)
 			.join(", ")})`,
 		handler(value) {
-			errorLog(`Flag -l, --log is not implemented. Value is: '${value}'`)
-			exit ||= true
+			if (/^0$/.test(value)) {
+				for (var i = 1; i < 6; i++)
+					setLogOption(normalizeLogOption(i as LogLevel)!, false, 2)
+			} else {
+				var parsed = parseLogOption(value),
+					seeLogOptions = memoize(
+						addError,
+						`Read '${green("log_options")}' help page section by running: ${green("bun run help log_options")}`,
+					)
+				if (Array.isArray(parsed)) {
+					var options = value.split(/,/g)
+					for (var [idx, val] of Object.entries(parsed)) {
+						if (val === undefined) {
+							errorLog(
+								`Log option '${green(options[idx as unknown as number])}' is not recognized as valid`,
+							)
+							seeLogOptions.call
+						}
+					}
+				} else if (typeof parsed === "object") {
+					if ("duplicate" in parsed)
+						errorLog(
+							`Log option '${green(parsed.duplicate)}' appeared more than once. Why should you do that?`,
+						)
+					else
+						errorLog(
+							`Log option '${green(parsed.notFound)}' is not recognized as valid`,
+						)
+				} else if (parsed === -1) {
+					errorLog(`Log level '${green(value)}' is not in the range: ${green("1-5")}`)
+					seeLogOptions.call
+				}
+			}
 		},
 	})
 
@@ -290,7 +326,7 @@ export function setupFlagHandlers() {
 		extendedDescription:
 			"Omit the configuration file (don't load any value from it to the global options for runtime)",
 		handler() {
-			setGlobalOption("useConfig", false, 2)
+			setGlobalConfigOption("useConfig", false)
 		},
 	})
 
@@ -339,12 +375,16 @@ export function setupFlagHandlers() {
 	})
 }
 
-function addText(text: string) {
+function addText(text: any) {
 	printMsg += `${!!printMsg ? "\n" : ""}${text}`
 }
 
-function errorLog(text: string) {
-	errorMsg += `${!!errorMsg ? "\n" : ""}${error(text)}`
+function addError(text: any) {
+	errorMsg += `${!!errorMsg ? "\n" : ""}${text}`
+}
+
+function errorLog(text: any) {
+	addError(error(text))
 	isError ||= true
 }
 
@@ -401,7 +441,7 @@ export function processFlags(argList: string[]) {
 				} else flagErrors.notRecognized(flag)
 			}
 		} else if (flagRegex.test(argument)) {
-			// flag detected
+			// regular flag (short/long)
 			flag = argument
 			if (flags.has(flag)) {
 				flagHandler = flags.get(flag)!
@@ -451,14 +491,11 @@ export function processFlags(argList: string[]) {
 	}
 
 	if (isError) {
-		console.log("error!")
 		console.log(errorMsg)
 	}
 	if (isFlagError) {
-		console.log("flag error!")
 		console.log(readHelpPage)
 	} else if (!isError && !isFlagError && exit) {
-		console.log("everything is ok")
 		console.log(printMsg)
 	}
 	if (isError || isFlagError || exit) process.exit()

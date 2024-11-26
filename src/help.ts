@@ -193,6 +193,7 @@ class CLISection<Name extends string> {
 		// todo: return a string, not print
 		var out = `${green(this.name)}:\n`
 		out += this.options.map((option) => option.build().string).join("\n")
+		out += "\n"
 		out += this.PS.join("\n")
 		return out
 	}

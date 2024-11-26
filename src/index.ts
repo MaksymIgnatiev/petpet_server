@@ -29,6 +29,7 @@ import {
 	getGlobalConfigOption,
 	getGlobalOption,
 	getServerOption,
+	logGlobalOptions,
 	ROOT_PATH,
 	setGlobalConfigOption,
 } from "./config"
@@ -88,9 +89,9 @@ app.get("/stats", (c) => c.json(stats))
 
 app.use("/:id", async (c, next) => {
 	// `logger` is the function to log the requests and responses
-	if (isStringNumber(c.req.param("id")))
+	if (isStringNumber(c.req.param("id"))) {
 		return isLogfeatureEnabled("rest") ? logger()(c, next) : next()
-	else return next()
+	} else return next()
 })
 
 app.get("/:id", async (c) => {
@@ -340,8 +341,7 @@ function setupWatch() {
 	// then start the server with `restart: true` value for indication
 	// proposes to default all values, and re-load flags and config file
 	return fs
-		.watch(ROOT_PATH, { persistent: true }, (event, file) => {
-			console.log(green(event))
+		.watch(ROOT_PATH, { persistent: true }, (_, file) => {
 			if (getGlobalConfigOption("useConfig") && /^config\.toml~?$/.test(file ?? "")) {
 				var eventType = "changed" as Parameters<typeof restart>[0],
 					hasConfig = memoize(hasConfigFile)
@@ -405,7 +405,6 @@ function handleAlternateBuffer() {
 			process.on("SIGTERM", exit)
 		}
 	} else {
-		console.log("not in alternate")
 		if (exitAlternate) {
 			exitAlternate()
 			process.removeListener("SIGINT", exit!)
@@ -431,19 +430,27 @@ function processAfterConfig() {
 }
 
 async function restart(eventType: "created" | "changed" | "deleted") {
-	return main(true, false).then(() => {
+	return main(true, false).then((text) => {
 		if (getGlobalOption("clearOnRestart")) stdout.write("\x1b[2J\x1b[H")
-		console.log(`Alternate buffer: ${green(getGlobalOption("alternateBuffer"))}`)
-		log("info", info(`Server restarted due to changes in config file: ${green(eventType)}`))
+		if (text) log("info", text)
+		log("watch", info(`Server restarted due to changes in config file: ${green(eventType)}`))
 		listening()
 	})
 }
-async function main(reload = false, log = true) {
+
+async function main(reload?: boolean, log?: boolean): Promise<string>
+async function main(r = false, l = true) {
+	var printText = ""
 	// Do not process anything if there are no flags => less CPU & RAM usage and faster startup time :)
-	args.length && processFlags(args)
-	return getConfig(reload)
+	if (args.length) printText = processFlags(args)
+	return getConfig(r)
 		.then(processAfterConfig)
-		.then(() => (log ? listening() : void 0))
+		.then(() => {
+			if (printText) log("info", printText)
+			// logGlobalOptions()
+			if (l) listening()
+		})
+		.then(() => printText)
 }
 
 main()

@@ -266,15 +266,18 @@ export function isLogfeatureEnabled(feature: LogOptionLong) {
 	return getLogOption(feature) ?? false
 }
 
-function normalizeLogOption<O extends LogOptionShort | LogOptionLong | LogLevel>(
+/** Accepts a log option, and normalizes it to the expanded long option (see `logLevel` in `./src/config.ts:105`)
+ * if option is string - tries to return it's full version, or undefined if not Found
+ * if option is number - tries to access the `logLevel` by this index -1, or undefined if not found */
+export function normalizeLogOption<O extends LogOptionShort | LogOptionLong | LogLevel>(
 	option: O,
 ): GetLogOption<O> {
 	return (
 		typeof option === "number"
-			? option < 6 && option > -1
-				? logLevel[option]
-				: "rest"
-			: (logLevel.find((e) => e[0] === option || e === option) ?? "rest")
+			? option < 6 && option > 0
+				? logLevel[--option]
+				: undefined
+			: logLevel.find((e) => e[0] === option || e === option)
 	) as GetLogOption<O>
 }
 
@@ -282,7 +285,7 @@ function normalizeLogOption<O extends LogOptionShort | LogOptionLong | LogLevel>
  * `"info"` event works any time unless `quiet` global option is set
  * `"warning"` event trigers if `warnings` global option is set
  * `"error"` event trigers if `errors` global option is set
- * `LogLevel` event trigers if aproparate level of logging is set
+ * `LogLevel` event trigers if aproparate level of logging is set (maximum, see )
  * `LogOptionLongCombination` event trigers if one of log options listed in combination is set
  */
 export function log<D extends LogOptionLongCombination>(dependencies: D, ...args: any[]): void
@@ -297,11 +300,14 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
 		} else if (typeof dependency === "string") {
 			if (dependency.includes(",")) {
 				var deps = dependency.split(/,/g) as LogStringOne[]
-				for (var dep of deps)
-					if (getLogOption(normalizeLogOption(dep))) {
+				for (var dep of deps) {
+					var opt = normalizeLogOption(dep)
+
+					if (opt && getLogOption(opt)) {
 						doLog = true
 						break
 					}
+				}
 			} else if (getLogOption(normalizeLogOption(dependency as LogStringOne))) doLog = true
 		}
 		doLog && console.log(...args)
@@ -557,4 +563,32 @@ export function sameType(value1: unknown, value2: unknown) {
 export function verboseError(error: Error, onError: any, offError: any) {
 	if (getGlobalOption("verboseErrors")) log("error", onError, error)
 	else log("error", offError)
+}
+
+export function parseLogOption(
+	option: string,
+): -1 | LogOptionLong[] | { duplicate: LogOptionLong } | { notFound: string } {
+	var result: LogOptionLong[] = []
+	if (isStringNumber(option)) {
+		var level = +option
+		if (level < 0 || level > 6) return -1
+		for (; level > 0; level--) {
+			var o = normalizeLogOption(level as LogLevel)
+			if (o !== undefined) result.push(o)
+		}
+	} else {
+		if (option.match(/,/)) {
+			var options = option.split(/,/g) as (LogOptionLong | LogOptionShort)[]
+			for (var opt of options) {
+				var final = normalizeLogOption(opt)
+				if (result.includes(final)) return { duplicate: final }
+				else result.push(final)
+			}
+		} else {
+			var r = normalizeLogOption(option as LogOptionShort | LogOptionLong)
+			if (r === undefined) return { notFound: option }
+			result.push(r)
+		}
+	}
+	return result
 }

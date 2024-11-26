@@ -104,9 +104,9 @@ export type BaseConfigOptions = {
 	avatars: boolean
 	/** Store cache or not (default=`true`) */
 	cache: boolean
-	/** How often to check cached gifs after last request (default=`60_000` ms, `1` min) */
+	/** How often to check cached GIFs after last request in milliseconds (default=`60_000` ms, `1` min) */
 	cacheCheckTime: number
-	/** How long to cache GIFs (default=`900_000` ms, `15` min) */
+	/** How long to cache GIFs in milliseconds (default=`900_000` ms, `15` min) */
 	cacheTime: number
 	/** Cache type. `"code"` - store cache in code itself, `"fs"` - in filesystem, `"both"` - both types together (default=`"code"`)*/
 	cacheType: "code" | "fs" | "both"
@@ -197,8 +197,19 @@ export type GlobalOptions = {
 
 // ----- Log Options -----
 
+type LogLevelToArrIndex = {
+	0: never
+	1: 0
+	2: 1
+	3: 2
+	4: 3
+	5: 4
+}
+
 export type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> = O extends LogLevel
-	? (typeof logLevel)[O]
+	? LogLevelToArrIndex[O] extends never
+		? undefined
+		: (typeof logLevel)[LogLevelToArrIndex[O]]
 	: O extends LogOptionShort
 		? {
 				[K in keyof LogOptions]: K extends `${O}${string}` ? K : never
@@ -228,7 +239,7 @@ export type LogOptions<
 }
 export type LogString = LogOptionLongCombination | LogOptionShortCombination
 export type LogStringOne = LogOptionLong | LogOptionShort
-export type LogLevel = 0 | 1 | 2 | 3 | 4
+export type LogLevel = 0 | 1 | 2 | 3 | 4 | 5
 
 export type LogOptionLongCombination = Combinations<LogOptionLong, ",">
 export type LogOptionShortCombination = Combinations<LogOptionShort, ",">
