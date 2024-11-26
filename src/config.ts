@@ -6,13 +6,16 @@ var callStackRegex =
 class Config implements GlobalOptions {
 	#state: GlobalOptions["state"] = "ready"
 	readonly version = "0.1.0"
-	avatars!: GlobalOptions["avatars"]
 	accurateTime!: GlobalOptions["accurateTime"]
+	alternateBuffer!: GlobalOptions["alternateBuffer"]
+	avatars!: GlobalOptions["avatars"]
 	cache!: GlobalOptions["cache"]
 	cacheCheckTime!: GlobalOptions["cacheCheckTime"]
 	cacheTime!: GlobalOptions["cacheTime"]
 	cacheType!: GlobalOptions["cacheType"]
 	compression!: GlobalOptions["compression"]
+	config!: GlobalOptions["config"]
+	clearOnRestart!: GlobalOptions["clearOnRestart"]
 	errors!: GlobalOptions["errors"]
 	logFeatures!: GlobalOptions["logFeatures"]
 	logOptions!: GlobalOptions["logOptions"]
@@ -29,13 +32,11 @@ class Config implements GlobalOptions {
 		for (var rawKey in globalOptionsDefault) {
 			var key = rawKey as keyof AllGlobalConfigOptions,
 				value = globalOptionsDefault[key]
-
 			Object.defineProperty(this, key, {
 				value: typeof value === "object" ? applyGlobalProp(value) : globalProp(value),
 			})
 		}
 	}
-
 	private checkSetStateCallStack() {
 		return callStackRegex.test(new Error().stack ?? "")
 	}
@@ -66,13 +67,16 @@ class Config implements GlobalOptions {
 }
 
 export var globalOptionsDefault: AllGlobalConfigOptions = {
-		avatars: true,
 		accurateTime: true, // false
+		alternateBuffer: true,
+		avatars: true,
 		cacheTime: 15 * 60_000, // 15 minutes in `ms`
 		cacheCheckTime: 60_000, // 1  minute  in `ms`
 		cache: true,
 		cacheType: "code",
 		compression: true,
+		clearOnRestart: true,
+		config: false,
 		errors: true,
 		logFeatures: false,
 		quiet: false,
@@ -95,22 +99,20 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 			host: "0.0.0.0", // "localhost"
 		},
 	},
-	// Absolute path to the root of the project
+	/** Absolute path to the root of the project */
 	ROOT_PATH = join(dirname(fileURLToPath(import.meta.url)), "../"),
-	priorityLevel: UnionToTuple<GlobalOptionPropPriorityString> = [
-		"original",
-		"config",
-		"arguments",
-	] as const,
+	priorityLevel = ["original", "config", "arguments"] as const,
 	logLevel = ["rest", "gif", "params", "cache", "watch"] as const
 
 var globalOptions: GlobalOptions = new Config(),
-	stateList = ["configuring", "ready"] satisfies UnionToTuple<GlobalOptions["state"]>
+	stateList = ["configuring", "ready"] as const,
+	configOptions = ["useConfig", "config"] as const
 
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
 import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
 import type {
+	AdditionalGlobalOptions,
 	AllGlobalConfigOptions,
 	FilteredObjectConfigProps,
 	FilterObjectProps,
@@ -121,7 +123,6 @@ import type {
 	GlobalOptions,
 	GlobalOptionsValues,
 	IndexOf,
-	UnionToTuple,
 	Values,
 } from "./types"
 
@@ -157,6 +158,29 @@ export function setState<S extends GlobalOptions["state"]>(state: S) {
 	}
 }
 
+/** Set the config specific values that can be modified everywhere any time, just to trac some ofher states */
+export function setGlobalConfigOption<
+	K extends keyof AdditionalGlobalOptions,
+	V extends AdditionalGlobalOptions[K],
+>(option: K, value: V) {
+	var success = false
+	if (
+		!hasNullable(option, value) &&
+		Object.hasOwn(globalOptions, option) &&
+		sameType(globalOptions[option].value, value)
+	) {
+		globalOptions[option].value = value
+		success = true
+	}
+	return success
+}
+
+/** Set the config specific values that can be modified everywhere any time, just to trac some ofher states */
+export function getGlobalConfigOption<K extends keyof AdditionalGlobalOptions>(
+	option: K,
+): AdditionalGlobalOptions[K] {
+	return globalOptions[option].value
+}
 export function setGlobalOption<
 	K extends keyof GlobalOptionsValues,
 	V extends GlobalOptionsValues[K],

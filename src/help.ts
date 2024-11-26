@@ -1,11 +1,6 @@
 var terminalWidth = process.stdout.columns || 80
 
-export var helpFlags = [
-		"flags",
-		"log_options",
-		"timestamp_format",
-		"sections",
-	] as const,
+export var helpFlags = ["flags", "log_options", "timestamp_format", "sections"] as const,
 	isSmallScreen = terminalWidth < 91
 
 var flagsGap = 1,
@@ -50,14 +45,14 @@ var flagsGap = 1,
 
 if (process.argv[1].match(/help\.ts$/)) {
 	if (process.argv[2] === "-f") {
+		if (process.env.npm_config_user_agent?.includes("bun")) {
+			process.stdout.write("\x1b[1A\x1b[2K")
+		}
 		// Running this file directly will not load the entry point to process flags => less CPU usage :)
 
 		var flag = process.argv[3]?.toLowerCase().trim()
-		if (
-			flag === undefined ||
-			helpFlags.includes(flag as (typeof helpFlags)[number])
-		)
-			main(flag as (typeof helpFlags)[number])
+		if (flag === undefined || helpFlags.includes(flag as (typeof helpFlags)[number]))
+			console.log(main(flag as (typeof helpFlags)[number]))
 		else console.log(error(`Unknown help section: ${green(flag)}`))
 	} else {
 		console.log(
@@ -72,10 +67,7 @@ if (process.argv[1].match(/help\.ts$/)) {
 import { flagObjects, setupFlagHandlers } from "./flags"
 import { error, green, warning } from "./functions"
 type FlagRest = [string | string[], string] | string
-type Section<
-	T extends string | string[] = string,
-	V extends FlagRest = FlagRest,
-> = Map<T, V>
+type Section<T extends string | string[] = string, V extends FlagRest = FlagRest> = Map<T, V>
 
 /** SS = Small Screen for short
  * return first value if screen is small. Else second
@@ -119,8 +111,7 @@ class CLIOption {
 		optionColumnWidth: number = optionsColumnWidth,
 		stdoutWidth: number = terminalWidth,
 	) {
-		optionColumnWidth =
-			optionColumnWidth - (isSmallScreen ? CLIOption.indent.length : 0)
+		optionColumnWidth = optionColumnWidth - (isSmallScreen ? CLIOption.indent.length : 0)
 
 		this.keyWidth = optionColumnWidth
 		this.stdoutWidth = stdoutWidth
@@ -144,23 +135,14 @@ class CLIOption {
 
 	build() {
 		var propsText = this.props ? ` ${this.props}` : "",
-			fullKey =
-				(isSmallScreen ? "" : CLIOption.indent) +
-				this.key.value.formated +
-				propsText,
-			fullKeyRaw =
-				(isSmallScreen ? "" : CLIOption.indent) +
-				this.key.value.raw +
-				propsText,
+			fullKey = (isSmallScreen ? "" : CLIOption.indent) + this.key.value.formated + propsText,
+			fullKeyRaw = (isSmallScreen ? "" : CLIOption.indent) + this.key.value.raw + propsText,
 			fullKeyPadValue = this.keyWidth + 1 - fullKeyRaw.length,
 			fullKeyPad = " ".repeat(fullKeyPadValue < 0 ? 0 : fullKeyPadValue),
-			readyLines = this.wrapText(this.descriptionText).map(
-				(line, index) =>
-					index === 0
-						? fullKey + fullKeyPad + line
-						: " ".repeat(
-								this.stdoutWidth - this.descriptionWidth + 1,
-							) + line,
+			readyLines = this.wrapText(this.descriptionText).map((line, index) =>
+				index === 0
+					? fullKey + fullKeyPad + line
+					: " ".repeat(this.stdoutWidth - this.descriptionWidth + 1) + line,
 			)
 		return {
 			get lines() {
@@ -182,10 +164,7 @@ class CLIOption {
 			currentLineLen = 0
 		for (var i = 0; i < words.length; i++) {
 			if (
-				currentLineLen +
-					(currentLine ? 1 : 0) +
-					rawWords[i].length +
-					+!isSmallScreen >=
+				currentLineLen + (currentLine ? 1 : 0) + rawWords[i].length + +!isSmallScreen >=
 				this.descriptionWidth
 			) {
 				lines.push(currentLine)
@@ -210,12 +189,12 @@ class CLISection<Name extends string> {
 		this.options = options
 		this.PS = postScriptum
 	}
-	print() {
-		var out = ""
-		for (var option of this.options) out += `${option.build().string}\n`
-		for (var ps of this.PS) out += `${ps}\n`
-		console.log(`${green(this.name)}:`)
-		console.log(out.slice(0, -1))
+	get string() {
+		// todo: return a string, not print
+		var out = `${green(this.name)}:\n`
+		out += this.options.map((option) => option.build().string).join("\n")
+		out += this.PS.join("\n")
+		return out
 	}
 }
 
@@ -260,8 +239,8 @@ function createCLISection<Name extends string>(
 	return new CLISection(name, CLIOptions, ps)
 }
 
-function printFlags(extended = false) {
-	createCLISection(
+function getFlagsDescription(extended = false) {
+	return createCLISection(
 		"FLAGS",
 		(() => {
 			setupFlagHandlers()
@@ -272,38 +251,33 @@ function printFlags(extended = false) {
 				if (c.short) parameter.push(`-${c.short}`)
 				if (c.parameter) value.push(c.parameter)
 
-				description = extended
-					? c.extendedDescription || c.description
-					: c.description
+				description = extended ? c.extendedDescription || c.description : c.description
 
 				parameter.push(`--${c.long}`)
 				value.push(description)
-				a.set(
-					parameter,
-					(value.length === 1 ? value[0] : value) as FlagRest,
-				)
+				a.set(parameter, (value.length === 1 ? value[0] : value) as FlagRest)
 				return a
 			}, new Map<string[], FlagRest>())
 		})(),
 		[
 			`You can combine flags that don't require a value into a sequense of flags. Ex: '${green("-LAWEt")}'`,
 		],
-	).print()
+	).string
 }
 
-function printLogOptions() {
-	createCLISection(
+function getLogOptions() {
+	return createCLISection(
 		"LOG OPTIONS",
 		optionsLog,
 		[
 			`To select specific features, use coma to separate them. Ex: '${green("-l r,g,p,c,w")}', or specify the level of logging. Ex: '${green("-l 3")}'`,
 		],
 		13,
-	).print()
+	).string
 }
 
-function printTimespampOptions() {
-	createCLISection(
+function getTimespampOptions() {
+	return createCLISection(
 		"TIMESTAMP FORMAT",
 		timestamps,
 		[
@@ -315,36 +289,39 @@ function printTimespampOptions() {
 			`'${green("m:h")}'         - minutes:hours`,
 		],
 		9,
-	).print()
+	).string
 }
 
-function printSections() {
-	createCLISection("SECTIONS", sections, [], 20).print()
+function getSections() {
+	return createCLISection("SECTIONS", sections, [], 20).string
 }
 
 export default function main(section?: (typeof helpFlags)[number]) {
 	var flags = false,
 		logOptions = false,
 		sections = false,
-		timestamps = false
+		timestamps = false,
+		result = "",
+		add = (text: string) => (result += `${!!result ? "\n" : ""}${text}`)
 
-	!section && console.log(`Usage: ${green("bun start [FLAGS...]")}`)
+	!section && add(`Usage: ${green("bun start [FLAGS...]")}`)
 	if (section === "flags") flags = true
 	if (section === "log_options") logOptions = true
 	if (section === "sections") sections = true
 	if (section === "timestamp_format") timestamps = true
 	if (section && !helpFlags.includes(section))
-		console.log(error(`Unknown help section: ${green(section)}`))
+		add(error(`Unknown help section: ${green(section)}`))
 
-	!section && printFlags()
+	!section && add(getFlagsDescription())
 
-	flags && printFlags(true)
-	logOptions && printLogOptions()
-	sections && printSections()
-	timestamps && printTimespampOptions()
+	flags && add(getFlagsDescription(true))
+	logOptions && add(getLogOptions())
+	sections && add(getSections())
+	timestamps && add(getTimespampOptions())
 
 	!section &&
-		console.log(
+		add(
 			`\nYou can watch a spesific section of the help page by running '${green("bun start -h/--help {section}")}' or '${green("bun run help {section}")}'\nAvailable sections: ${helpFlags.map(green).join(", ")}`,
 		)
+	return result
 }

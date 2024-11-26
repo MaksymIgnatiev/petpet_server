@@ -13,6 +13,7 @@ import {
 	log,
 	memoize,
 	updateObject,
+	verboseError,
 	yellow,
 } from "./functions"
 import { fetchAvatar, generatePetPet } from "./petpet"
@@ -250,7 +251,11 @@ export var requestTime = {
 						fetchAvatar(id, size).then(
 							(result) => resolve(result),
 							(e) => {
-								log("error", error("Error while fetching avatar:\n"), e)
+								verboseError(
+									e,
+									error("Error while fetching avatar:\n"),
+									error("Error while fetching avatar"),
+								)
 								reject(e)
 							},
 						)

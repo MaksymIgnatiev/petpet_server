@@ -26,11 +26,11 @@ Bun.file(join(ROOT_PATH, "assets", "hand.gif"))
 		})
 	})
 
-function formatObj(obj: Record<string, any>) {
-	var result = []
-	for (var [key, value] of Object.entries(obj)) result.push(`${green(key)}: ${value}`)
-	return result.join(", ")
-}
+// function formatObj(obj: Record<string, any>) {
+// 	var result = []
+// 	for (var [key, value] of Object.entries(obj)) result.push(`${green(key)}: ${value}`)
+// 	return result.join(", ")
+// }
 
 export var defaultPetPetParams: {
 	+readonly [K in keyof PetPetParams]-?: PetPetParams[K]

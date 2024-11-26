@@ -1,5 +1,6 @@
 fileNotForRunning()
 
+import { stdin, stdout } from "process"
 import type { Context, MiddlewareHandler } from "hono"
 import fs from "fs"
 import { join } from "path"
@@ -23,6 +24,8 @@ import {
 	ROOT_PATH,
 	logLevel,
 	resetGlobalOptionsHandler,
+	setGlobalConfigOption,
+	getGlobalConfigOption,
 } from "./config"
 import { TOML } from "bun"
 import { parseToml } from "./parseConfigFile"
@@ -39,7 +42,7 @@ export var info = customLogTag("Info", cyan),
 /** Call this function at the top of the file if you don't want this file to be run directly */
 export function fileNotForRunning() {
 	var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)?.[0]
-	if (file && (file === "index.ts" || file === "help.ts")) return
+	if (file && (file === "index.ts" || file === "help.ts" || file === "explain.ts")) return
 	else
 		import("./config").then(() => {
 			console.log(
@@ -107,6 +110,73 @@ export function cyan(text: any) {
 
 export function purple(text: any) {
 	return `\x1b[35m${text}\x1b[0m`
+}
+
+export function EXIT(isInBuffer = false) {
+	isInBuffer && exitAlternateBuffer()
+	process.exit()
+}
+
+/** Sets the terminal raw mode to `enabled`, enters the alternate buffer, and returns a cleanup function that sets the terminal raw mode to `disabled`, and exits the alternate buffer */
+export function enterAlternateBuffer() {
+	var command = ""
+	if (stdin.isTTY) {
+		try {
+			stdin.setRawMode(true)
+		} catch (e) {
+			console.error("Failed to set raw mode:", e)
+			process.exit()
+		}
+	}
+	try {
+		// enter alternate buffer, and move cursor to the left-top position
+		stdout.write("\x1b[?1049h\x1b[H")
+	} catch (e) {
+		console.error("Failed to enter alternate buffer:", e)
+		process.exit()
+	}
+	/** Listen to a specific command or a sequense of characters to exit */
+	var listener = (buffer: Buffer) => {
+		console.log(`Buffer: ${buffer.join(", ")}`)
+		// <Ctrl> + c => SIGINT (interupt)
+		if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
+		// <Ctrl> + z => SIGTSTP (send to background)
+		else if (buffer.length === 1 && buffer[0] === 0x1a) {
+			exitAlternateBuffer()
+			process.kill(process.pid, "SIGTSTP")
+		} else {
+			var str = buffer.toString().trim()
+			if (str === "q") EXIT(true)
+			else if ((str === ":" || str === "Z") && command === "") command = str
+			else if ((str === "q" || str === "x") && command === ":") EXIT(true)
+			else if (str === "Z" && command === "Z") EXIT(true)
+			else if (command !== "") command = ""
+		}
+	}
+	stdin.on("data", listener)
+	return () => {
+		stdin.removeListener("data", listener)
+		exitAlternateBuffer()
+	}
+}
+
+/** Safely exit alternate buffer
+ * Use ONLY if there are no other ways! Preferable to use the cleanup function from `enterAlternateBuffer` function to not mess up with them */
+export function exitAlternateBuffer() {
+	if (stdin.isTTY) {
+		try {
+			stdin.setRawMode(false)
+		} catch (e) {
+			console.error("Failed to exit raw mode:", e)
+			process.exit()
+		}
+	}
+	try {
+		stdout.write("\x1b[?1049l")
+	} catch (e) {
+		console.error("Failed to exit alternate buffer:", e)
+		process.exit()
+	}
 }
 
 export function formatDelta<T extends number, A extends boolean = false>(
@@ -253,7 +323,7 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
  * |   D    | day (of month)                                 |
  * |   M    | month (number)                                 |
  * |   N    | month (3 first letters of the month name)      |
- * |   Y    | year |
+ * |   Y    | year                                           |
  *
  * _Note!_ To escape some character that are listed in formating - use backslash symbol `\` before character (you would probably need second one, to escape the escape character like `\n`, `\t` or others depending on where you write the format).
  * _Note!_ `microseconds` are obtained with the high precision time in milliseconds from the script start time, which has a part after period, that indicates microseconds. So it's probably not syncronized with the computer's clock time, but it can be used as a timestamp in the time.
@@ -440,7 +510,7 @@ export function isStringTrueBoolean(obj: `${boolean}`): obj is "true" {
 }
 
 export function hasConfigFile() {
-	return getGlobalOption("useConfig") && fs.readdirSync(ROOT_PATH).includes("config.toml")
+	return getGlobalConfigOption("useConfig") && fs.readdirSync(ROOT_PATH).includes("config.toml")
 }
 
 /** Try to get the config file, and try to parse it
@@ -456,18 +526,35 @@ export function getConfig(reload = false): AlwaysResolvingPromise<boolean> {
 				.then(parseToml)
 				.then(
 					() => {
+						setGlobalConfigOption("config", true)
 						setState("ready")
 						resolve(true)
 					},
 					(e) => {
-						log("error", error("Error while parsing toml configuration file:\n"), e)
+						verboseError(
+							e,
+							error("Error while parsing toml configuration file:\n"),
+							error("Error while parsing toml configuration file"),
+						)
+						setGlobalConfigOption("config", false)
+						setState("ready")
 						resolve(false)
 					},
 				)
-		else setState("ready"), resolve(true)
+		else {
+			setGlobalConfigOption("config", false)
+			setState("ready")
+			resolve(true)
+		}
 	})
 }
 
 export function sameType(value1: unknown, value2: unknown) {
 	return typeof value1 === typeof value2
+}
+
+/** Log the error message, and if `verboseErrors` global option is enabled - log first message. Else second */
+export function verboseError(error: Error, onError: any, offError: any) {
+	if (getGlobalOption("verboseErrors")) log("error", onError, error)
+	else log("error", offError)
 }

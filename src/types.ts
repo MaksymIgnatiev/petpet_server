@@ -88,7 +88,7 @@ export type GlobalOptionProp<T = any> = {
 	source: GlobalOptionPropPriorityString
 }
 
-export type GlobalOptionsValues = ExcludeObjectProps<AllGlobalConfigOptions, Record<string, any>>
+export type GlobalOptionsValues = ExcludeObjectProps<BaseConfigOptions, Record<string, any>>
 type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 	[K in keyof O]: O[K] extends Record<string, any>
 		? ApplyGlobalOptionPropTypeRecursively<O[K]>
@@ -96,10 +96,12 @@ type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 }
 
 export type BaseConfigOptions = {
-	/** Cache avatars to reduce amount of requests to get them (default=`true`) */
-	avatars: boolean
 	/** Enable microseconds notation in milliseconds values, and milliseconds notation in minutes (default=`false`) */
 	accurateTime: boolean
+	/** Use alternate buffer to run the main application or not (output may mess up shell state) (default=`true`) */
+	alternateBuffer: boolean
+	/** Cache avatars to reduce amount of requests to get them (default=`true`) */
+	avatars: boolean
 	/** Store cache or not (default=`true`) */
 	cache: boolean
 	/** How often to check cached gifs after last request (default=`60_000` ms, `1` min) */
@@ -110,6 +112,8 @@ export type BaseConfigOptions = {
 	cacheType: "code" | "fs" | "both"
 	/** Use compression to store all cache in code in compressed format or not (default=`true`) */
 	compression: boolean
+	/** Clear the stdout on server restart due to changes in config file (default=`true`) */
+	clearOnRestart: boolean
 	/** Log errors during runtime (default=`true`) */
 	errors: boolean
 	/** Show what log features are enabled (default=`false`) */
@@ -170,9 +174,11 @@ export type BaseConfigOptions = {
 	watch: boolean
 }
 
-type AdditionalGlobalOptions = {
+export type AdditionalGlobalOptions = {
 	/** Use the configuration files or not (default=`true`) */
 	useConfig: boolean
+	/** Indicates that config file is specified or not */
+	config: boolean
 }
 
 type AllGlobalConfigOptionsBase = BaseConfigOptions & AdditionalGlobalOptions

@@ -8,7 +8,8 @@
 		"start": "bun run src/index.ts",
 		"dev": "bun --watch src/index.ts",
 		"": "Running src/help.ts directly does not invoke all processing stuff => less CPU and RAM usage :)",
-		"help": "bun run src/help.ts -f"
+		"help": "bun run src/help.ts -f",
+		"explain": "bun run src/explain.ts -f"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.1.13"

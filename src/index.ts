@@ -1,3 +1,6 @@
+stdout.write("\x1b[1A\x1b[2K")
+
+import { stdout } from "process"
 import fs from "fs"
 import { Hono, type Context, type TypedResponse } from "hono"
 import type { Server } from "bun"
@@ -7,17 +10,28 @@ import type { PetPetParams, Hash } from "./types"
 import {
 	chechCache,
 	checkValidRequestParams,
+	enterAlternateBuffer,
 	error,
+	EXIT,
 	getConfig,
 	green,
+	hasConfigFile,
 	info,
 	isCurrentCacheType,
 	isLogfeatureEnabled,
 	isStringNumber,
 	log,
 	logger,
+	memoize,
+	verboseError,
 } from "./functions"
-import { getGlobalOption, getServerOption, ROOT_PATH } from "./config"
+import {
+	getGlobalConfigOption,
+	getGlobalOption,
+	getServerOption,
+	ROOT_PATH,
+	setGlobalConfigOption,
+} from "./config"
 import { processFlags } from "./flags"
 import { cache, statControll, stats } from "./db"
 
@@ -26,6 +40,16 @@ var args = process.argv.slice(2),
 	server: Server,
 	watcher: fs.FSWatcher,
 	intervalID: Timer,
+	/** Exit function from the alternate buffer
+	 * `undefined` - not in alternate buffer
+	 * `function` - in alternate buffer */
+	exitAlternate: undefined | (() => void),
+	/** Exit the whole process with exiting alternate buffer
+	 *
+	 * DON'T TRY TO USE THIS FUNCTION UNLESS YOU KNOW WHAT YOU ARE DOING
+	 *
+	 * Basicaly, it's just a function that force exits the alternate buffer, and exit the process, so, nothing special */
+	exit: undefined | (() => void),
 	// 30d do not ask again via cache in HTTP headers
 	cacheTime = 30 * 24 * 60 * 60,
 	GIFResponse = (gif: Uint8Array) =>
@@ -85,8 +109,7 @@ app.get("/:id", async (c) => {
 		resizeY = defaultPetPetParams.resizeY,
 		squeeze = defaultPetPetParams.squeeze
 
-	if (!isStringNumber(userID))
-		return c.json({ ok: false, code: 204, statusText: "No Content" }, 204)
+	if (!isStringNumber(userID)) return noContent(c)
 
 	var notValidParams = checkValidRequestParams(c, {
 		shift: shiftRaw,
@@ -102,7 +125,7 @@ app.get("/:id", async (c) => {
 		return notValidParams
 	}
 
-	// at this point, each parameter is checked with `checkValidRequestParams` function, and can be used
+	// at this point, each parameter is checked with `checkValidRequestParams` function, and can be used if it's exist
 	if (shiftRaw !== undefined) [shiftX, shiftY] = shiftRaw.split("x").map(Number)
 	if (resizeRaw !== undefined) [resizeX, resizeY] = resizeRaw.split("x").map(Number)
 	if (sizeRaw !== undefined) size = +sizeRaw
@@ -114,7 +137,7 @@ app.get("/:id", async (c) => {
 
 	try {
 		return new Promise<Response>((resolve) => {
-			// 3 essentials that will do whole work automaticaly thanks to `thenableObject`s
+			// 3 essentials that will do whole work automaticaly thanks to the `thenableObject`s
 			var resolved = false,
 				ready = (uintArr: Uint8Array) => {
 					statControll.response.common.increment.success()
@@ -205,7 +228,12 @@ app.get("/:id", async (c) => {
 			}
 		})
 	} catch (e) {
-		log("error", error(`Error while processing GET /${userID} :\n`), e)
+		if (e instanceof Error)
+			verboseError(
+				e,
+				error(`Error while processing GET /${userID} :\n`),
+				error(`Error while processing GET /${userID}`),
+			)
 		return internalServerError(c, "/:id")
 	}
 })
@@ -292,12 +320,18 @@ app.get("/avatar/:id", async (c) => {
 				}
 			})
 		} catch (e) {
-			log("error", error(`Error while processing GET /avatar/${id} :\n`), e)
+			if (e instanceof Error)
+				verboseError(
+					e,
+					error(`Error while processing GET /avatar/${id} :\n`),
+					error(`Error while processing GET /avatar/${id}`),
+				)
 			return internalServerError(c, "/avatar/:id")
 		}
 	}
 })
 
+// no content on all other routes
 app.get("*", noContent)
 
 function setupWatch() {
@@ -306,11 +340,32 @@ function setupWatch() {
 	// then start the server with `restart: true` value for indication
 	// proposes to default all values, and re-load flags and config file
 	return fs
-		.watch(ROOT_PATH, { persistent: true }, (_, file) => {
-			if (getGlobalOption("useConfig") && /^config\.toml~?$/.test(file ?? "")) main(true)
+		.watch(ROOT_PATH, { persistent: true }, (event, file) => {
+			console.log(green(event))
+			if (getGlobalConfigOption("useConfig") && /^config\.toml~?$/.test(file ?? "")) {
+				var eventType = "changed" as Parameters<typeof restart>[0],
+					hasConfig = memoize(hasConfigFile)
+				if (getGlobalConfigOption("config")) {
+					if (hasConfig.value) {
+						eventType = "changed"
+					} else {
+						eventType = "deleted"
+						setGlobalConfigOption("config", false)
+					}
+				} else if (hasConfig.value) {
+					eventType = "created"
+					setGlobalConfigOption("config", true)
+				}
+
+				restart(eventType)
+			}
 		})
 		.on("error", (e) => {
-			log("error", error(`Error while watching config files for change:`), e)
+			verboseError(
+				e,
+				error("Error while watching config files for change:\n"),
+				error("Error while watching config files for change"),
+			)
 		})
 }
 
@@ -337,23 +392,58 @@ function handleServer() {
 	})
 }
 
+/** Dynamicaly enter and exit alternate buffer depending on config preferences, and handle `SIGINT` / `SIGTERM` signals to exit alternate buffer */
+function handleAlternateBuffer() {
+	if (getGlobalOption("alternateBuffer")) {
+		if (!exitAlternate) {
+			exitAlternate = enterAlternateBuffer()
+			exit = () => {
+				if (exitAlternate) exitAlternate()
+				EXIT()
+			}
+			process.on("SIGINT", exit)
+			process.on("SIGTERM", exit)
+		}
+	} else {
+		console.log("not in alternate")
+		if (exitAlternate) {
+			exitAlternate()
+			process.removeListener("SIGINT", exit!)
+			process.removeListener("SIGTERM", exit!)
+			exitAlternate = undefined
+		}
+	}
+}
+
 function listening() {
-	log("info", info(`Listening on URL: ${green(server?.url ?? "Server is not yet started")}`))
+	log(
+		"info",
+		info(server?.url ? `Listening on URL: ${green(server.url)}` : "Server is not yet started"),
+	)
 }
 
 /** Process server setup after geting the config */
 function processAfterConfig() {
+	handleAlternateBuffer()
 	handleCacheInterval()
 	handleServer()
 	handleWatcher()
-	listening()
 }
 
-function restart() {}
-function main(restart = false) {
-	// Do not process anything if there are no flags => less CPU & RAM usage :)
+async function restart(eventType: "created" | "changed" | "deleted") {
+	return main(true, false).then(() => {
+		if (getGlobalOption("clearOnRestart")) stdout.write("\x1b[2J\x1b[H")
+		console.log(`Alternate buffer: ${green(getGlobalOption("alternateBuffer"))}`)
+		log("info", info(`Server restarted due to changes in config file: ${green(eventType)}`))
+		listening()
+	})
+}
+async function main(reload = false, log = true) {
+	// Do not process anything if there are no flags => less CPU & RAM usage and faster startup time :)
 	args.length && processFlags(args)
-	getConfig(restart).then(processAfterConfig)
+	return getConfig(reload)
+		.then(processAfterConfig)
+		.then(() => (log ? listening() : void 0))
 }
 
 main()

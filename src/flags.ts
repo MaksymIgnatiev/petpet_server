@@ -1,12 +1,20 @@
 fileNotForRunning()
 
-import { error, fileNotForRunning, formatDate, green, isStringNumber } from "./functions"
+import {
+	enterAlternateBuffer,
+	error,
+	fileNotForRunning,
+	formatDate,
+	green,
+	isStringNumber,
+} from "./functions"
 import {
 	getGlobalOption,
 	getServerOption,
 	getVersion,
 	globalOptionsDefault,
 	setGlobalOption,
+	setServerOption,
 	setState,
 } from "./config"
 import printHelp, { helpFlags, ss } from "./help"
@@ -17,7 +25,10 @@ var flagRegex = /^-([a-zA-Z]|-[a-z\-]+)$/,
 	readHelpPage =
 		`Run '${green("bun run help")}' or '${green("bun start -h")}' to read the help page to see the correct flag usage` as const,
 	isFlagError = false,
+	isError = false,
 	exit = false,
+	printMsg = "",
+	errorMsg = "",
 	flagErrors = {
 		noProp(flag: string, args?: string | string[] | readonly string[]) {
 			errorLog(
@@ -44,6 +55,7 @@ var flagRegex = /^-([a-zA-Z]|-[a-z\-]+)$/,
 			errorLog(
 				`Type of 'value' property on flag '${green(flag)}' is not compatitable with expected type. Consider reading '${green("./src/types")}' file under the '${green("Flag<T extends FlagValueUnion>")}' type`,
 			)
+			isFlagError ||= true
 		},
 	}
 
@@ -98,7 +110,7 @@ export function setupFlagHandlers() {
 		description: `Display this help message (${green("bun run help")}) or a spesific section. See ${green("SECTIONS")}`,
 		extendedDescription: `Display this help message (alias is also '${green("bun run help")}') or a spesific section. Available sections: ${helpFlags.map(green).join(ss(",", ", "))}`,
 		handler(value) {
-			printHelp(value as (typeof helpFlags)[number])
+			addText(printHelp(value as (typeof helpFlags)[number]))
 			exit = true
 		},
 	})
@@ -144,6 +156,7 @@ export function setupFlagHandlers() {
 			.join(", ")})`,
 		handler(value) {
 			errorLog(`Flag -l, --log is not implemented. Value is: '${value}'`)
+			exit ||= true
 		},
 	})
 
@@ -167,7 +180,10 @@ export function setupFlagHandlers() {
 		extendedDescription: `Cache time in miliseconds (default${ss("", " ")}=${ss("", " ")}${green(getGlobalOption("cacheTime"))}${ss("", " ")}ms, ${green(getGlobalOption("cacheTime") / 60_000)}${ss("", " ")}mins)`,
 		handler(value) {
 			if (isStringNumber(value)) setGlobalOption("cacheTime", +value, 2)
-			else errorLog(`Flag '${green("c")}' accepted a non-numeric parameter`)
+			else {
+				errorLog(`Flag '${green("c")}' accepted a non-numeric parameter`)
+				exit ||= true
+			}
 		},
 	})
 
@@ -179,6 +195,7 @@ export function setupFlagHandlers() {
 		extendedDescription: `What kind of cache to use (read '${green("cache.md")}' file for more) ${dv(green(getGlobalOption("cacheType")))}`,
 		handler(value) {
 			errorLog(`Flag --cache-type is not implemented. Value is: '${value}'`)
+			exit ||= true
 		},
 	})
 
@@ -192,7 +209,10 @@ export function setupFlagHandlers() {
 		handler(value) {
 			if (value.match(/y|yes/i)) setGlobalOption("permanentCache", true, 2)
 			else if (value.match(/n|no/i)) setGlobalOption("cache", false, 2)
-			else errorLog(`Flag --cache accepts only following arguments: y, yes, n, no`)
+			else {
+				errorLog(`Flag --cache accepts only following arguments: y, yes, n, no`)
+				exit ||= true
+			}
 		},
 	})
 
@@ -256,8 +276,8 @@ export function setupFlagHandlers() {
 		extendedDescription: `Generate default config file in the root of the project with default values`,
 		handler() {
 			genConfig()
-			console.log(`Generated '${green("config.toml")}' configuration file`)
-			exit = true
+			addText(`Generated '${green("config.toml")}' configuration file`)
+			exit ||= true
 		},
 	})
 
@@ -282,7 +302,11 @@ export function setupFlagHandlers() {
 		description: "Port on which the server will be running",
 		extendedDescription: `Port on which the server will be running ${dv(green(getServerOption("port")))}`,
 		handler(value) {
-			errorLog(`Flag -P, --port is not implemented. Value is: '${value}'`)
+			if (isStringNumber(value)) {
+				setServerOption("port", +value, 2)
+			} else {
+				errorLog(`Flag -p accepted non-numeric value`)
+			}
 		},
 	})
 
@@ -315,8 +339,13 @@ export function setupFlagHandlers() {
 	})
 }
 
+function addText(text: string) {
+	printMsg += `${!!printMsg ? "\n" : ""}${text}`
+}
+
 function errorLog(text: string) {
-	console.log(error(text))
+	errorMsg += `${!!errorMsg ? "\n" : ""}${error(text)}`
+	isError ||= true
 }
 
 function checkFlagParamsOrder(params: FlagValueArray) {
@@ -420,7 +449,19 @@ export function processFlags(argList: string[]) {
 			} else flagErrors.notRecognized(argument)
 		} else flagErrors.notRecognized(argument)
 	}
-	if (isFlagError) console.log(readHelpPage)
-	if (isFlagError || exit) process.exit()
+
+	if (isError) {
+		console.log("error!")
+		console.log(errorMsg)
+	}
+	if (isFlagError) {
+		console.log("flag error!")
+		console.log(readHelpPage)
+	} else if (!isError && !isFlagError && exit) {
+		console.log("everything is ok")
+		console.log(printMsg)
+	}
+	if (isError || isFlagError || exit) process.exit()
 	setState("ready")
+	return printMsg
 }

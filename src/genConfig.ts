@@ -1,8 +1,9 @@
 fileNotForRunning()
+
 type ObjDescriptions = FilterObjectProps<typeof config, Record<string, any>>
 var toml = "",
-	/** Patter for default value anotation inside comments. If spesified - will be replaced. If not - will be appended to the end in silgle lines (not the multiple ones) */
-	defaultValueRegex = /(?<!\\)<(?<!\\)d(?<!\\)>/, // <d> without any backslashes for escaping
+	/** Pattern for default value anotation inside comments. If spesified - will be replaced. If not - will be appended to the end in silgle lines (not the multiple ones) */
+	defaultValueRegex = /<d>/,
 	config: {
 		[K in keyof BaseConfigOptions]: BaseConfigOptions[K] extends Record<string, any>
 			? { description: string } & {
@@ -10,30 +11,36 @@ var toml = "",
 				}
 			: string
 	} = {
-		avatars: "Enable or disable avatar caching",
 		accurateTime: "Enable or disable accurate time marks",
+		alternateBuffer:
+			"Use an alternate buffer to output all logs <d>\n" +
+			"Like a normal window, only provided at the shell level, which is not related to the existing one\n" +
+			"The shell can get cluttered after a long period of work, so it is strongly recommended to enable an alternate buffer to prevent this",
+		avatars: "Enable or disable avatar caching",
 		cacheTime: "Cache duration in milliseconds",
 		cacheCheckTime: "Interval to check cache validity in milliseconds",
 		cache: "Enable or disable caching",
 		cacheType: "Type of the cache to save ('code' | 'fs' | 'both')",
 		compression: "Use compression to store all cache in code in compressed format or not",
+		clearOnRestart:
+			"Clear the stdout from previous logs on server restart due to changes in config file",
 		errors: "Enable or disable error logging (affect only after parsing flags)",
 		logFeatures: "Log logging features on startup/restart",
 		permanentCache:
 			"Keep the cache permanently (`cacheTime` does nothing, if `cache` == `false` - overrides)",
-		quiet: "Run in quiet mode, suppressing all output",
+		quiet: "Run in quiet mode, suppressing all output (litteraly all output). Affects only runtime, not the flag parsing stage",
 		timestamps: "Enable timestamps in logs",
 		timestampFormat:
 			"Format for timestamps in logs (see `configuration.md` file for format options)",
 		warnings: "Enable or disable warnings (affect only after parsing flags)",
-		watch: "Watching the config file for changes, and do a restart on change (creation, content change, removal)",
+		watch: "Watching the config file for changes, and do a restart on change (creation, content change, removal) <d>\nEnable if you want to make changes and at the same time apply changes without restarting the server maualy,\nor if you need to change parameters often",
 		verboseErrors: "Show full errors on each error during runtime",
 		logOptions: {
 			description: "Options for logging stuff",
 			rest: "Log REST API requests/responses",
 			gif: "Log GIF related info (creation/availability in cache/repaiting/etc.)",
 			params: "Log REST parameters for the GIF",
-			cache: "Log cache actions (how many was deleted)",
+			cache: "Log cache actions (how many was deleted/repaired/etc.)",
 			watch: "Log when server restarted due to `watch` global option when config file changed (`watch` global option needs to be enabled)",
 		},
 		server: {
