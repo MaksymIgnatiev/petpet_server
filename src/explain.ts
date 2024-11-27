@@ -1,4 +1,4 @@
-import { green, warning } from "./functions"
+import { green, print, warning } from "./functions"
 import { helpFlags } from "./help"
 
 if (process.argv[1].match(/explain\.ts$/)) {
@@ -7,7 +7,7 @@ if (process.argv[1].match(/explain\.ts$/)) {
 			process.stdout.write("\x1b[1A\x1b[2K")
 		main()
 	} else {
-		console.log(
+		print(
 			warning(
 				`File ${green("./src/explain.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
 			),
@@ -23,5 +23,5 @@ function main() {
 		`See specific help page section: ${green("bun run help {section}")} or ${green("bun start -h {section}")}, where ${green("section")} can be: ${helpFlags.map(green).join(", ")}`,
 		`During `,
 	]
-	for (var text of info) console.log(text)
+	for (var text of info) print(text)
 }

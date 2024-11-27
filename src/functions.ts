@@ -45,7 +45,7 @@ export function fileNotForRunning() {
 	if (file && (file === "index.ts" || file === "help.ts" || file === "explain.ts")) return
 	else
 		import("./config").then(() => {
-			console.log(
+			print(
 				error(
 					`File ${green(`./src/${file}`)} is a library file and is not intended to be run directly`,
 				),
@@ -122,9 +122,9 @@ export function enterAlternateBuffer() {
 	var command = ""
 	if (stdin.isTTY) {
 		try {
-			stdin.setRawMode(true)
+			// stdin.setRawMode(true)
 		} catch (e) {
-			console.error("Failed to set raw mode:", e)
+			print("Failed to set raw mode:", e)
 			process.exit()
 		}
 	}
@@ -132,27 +132,35 @@ export function enterAlternateBuffer() {
 		// enter alternate buffer, and move cursor to the left-top position
 		stdout.write("\x1b[?1049h\x1b[H")
 	} catch (e) {
-		console.error("Failed to enter alternate buffer:", e)
+		print("Failed to enter alternate buffer:", e)
 		process.exit()
 	}
 	/** Listen to a specific command or a sequense of characters to exit */
 	var listener = (buffer: Buffer) => {
-		console.log(`Buffer: ${buffer.join(", ")}`)
-		// <Ctrl> + c => SIGINT (interupt)
-		if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
-		// <Ctrl> + z => SIGTSTP (send to background)
-		else if (buffer.length === 1 && buffer[0] === 0x1a) {
-			exitAlternateBuffer()
-			process.kill(process.pid, "SIGTSTP")
-		} else {
-			var str = buffer.toString().trim()
-			if (str === "q") EXIT(true)
-			else if ((str === ":" || str === "Z") && command === "") command = str
-			else if ((str === "q" || str === "x") && command === ":") EXIT(true)
-			else if (str === "Z" && command === "Z") EXIT(true)
-			else if (command !== "") command = ""
+			print(`Buffer: ${buffer.join(", ")}`)
+			// <Ctrl> + c => SIGINT (interupt)
+			if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
+			// <Ctrl> + z => SIGTSTP (send to background) // not sure yes
+			else if (buffer.length === 1 && buffer[0] === 0x1a) {
+				exitAlternateBuffer()
+				process.kill(process.pid, "SIGTSTP")
+				process.kill(process.pid, "SIGTSTP")
+			} else {
+				var str = buffer.toString().trim()
+				if (str === "q") EXIT(true)
+				else if ((str === ":" || str === "Z") && command === "") command = str
+				else if ((str === "q" || str === "x") && command === ":") EXIT(true)
+				else if (str === "Z" && command === "Z") EXIT(true)
+				else if (command !== "") command = ""
+			}
+		},
+		keyListener = (
+			str: string,
+			key: { name: string; ctrl: boolean; meta: boolean; shift: boolean; sequence: string },
+		) => {
+			console.log({ str, key })
 		}
-	}
+	stdin.on("keypress", keyListener)
 	stdin.on("data", listener)
 	return () => {
 		stdin.removeListener("data", listener)
@@ -167,14 +175,14 @@ export function exitAlternateBuffer() {
 		try {
 			stdin.setRawMode(false)
 		} catch (e) {
-			console.error("Failed to exit raw mode:", e)
+			print("Failed to exit raw mode:\n", e)
 			process.exit()
 		}
 	}
 	try {
 		stdout.write("\x1b[?1049l")
 	} catch (e) {
-		console.error("Failed to exit alternate buffer:", e)
+		print("Failed to exit alternate buffer:\n", e)
 		process.exit()
 	}
 }
@@ -191,7 +199,7 @@ export function formatDeltaValue<T extends number>(delta: T) {
 	var result = formatDelta(delta, getGlobalOption("accurateTime"))
 	return `${result}${delta < 1000 ? "ms" : "s"}`
 }
-export function logger(fn: (message: string) => void = console.log): MiddlewareHandler {
+export function logger(fn: (message: string) => void = print): MiddlewareHandler {
 	return async (c, next) => {
 		var { method } = c.req,
 			path = decodeURIComponent(c.req.url.match(/^https?:\/\/[^/]+(\/[^\?#]*)/)?.[1] ?? "/"),
@@ -310,7 +318,7 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
 				}
 			} else if (getLogOption(normalizeLogOption(dependency as LogStringOne))) doLog = true
 		}
-		doLog && console.log(...args)
+		doLog && print(...args)
 	}
 }
 
@@ -577,7 +585,7 @@ export function parseLogOption(
 			if (o !== undefined) result.push(o)
 		}
 	} else {
-		if (option.match(/,/)) {
+		if (option.includes(",")) {
 			var options = option.split(/,/g) as (LogOptionLong | LogOptionShort)[]
 			for (var opt of options) {
 				var final = normalizeLogOption(opt)
@@ -591,4 +599,21 @@ export function parseLogOption(
 		}
 	}
 	return result
+}
+
+/** Print raw information to the stdout, depending on where the script is running (TTY or not, to include ANSI escape codes or not)
+ * All arguments will be converted to string, joined with empty string (`""`), printed to the stdout with `\n` at the end to flush the buffer
+ *
+ */
+export function print(...args: any[]) {
+	stdout.write(
+		args
+			.map(
+				stdout.isTTY
+					? String // if TTY => print as is
+					: // if not TTY => replace all ANSI escape codes
+						(e) => String(e).replace(/\u001b\[\??(\d+m|(\d+)?[a-zA-Z])/g, ""),
+			)
+			.join() + "\n",
+	)
 }

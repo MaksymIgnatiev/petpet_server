@@ -1,9 +1,12 @@
-stdout.write("\x1b[1A\x1b[2K")
+if (process.env.npm_config_user_agent?.includes("bun")) {
+	if (process.stdout.isTTY) process.stdout.write("\x1b[1A\x1b[2K")
+}
 
 import { stdout } from "process"
-import fs from "fs"
+import { Stats, unwatchFile, watchFile, type StatWatcher } from "fs"
 import { Hono, type Context, type TypedResponse } from "hono"
 import type { Server } from "bun"
+import { join } from "path"
 
 import { defaultPetPetParams } from "./petpet"
 import type { PetPetParams, Hash } from "./types"
@@ -15,7 +18,6 @@ import {
 	EXIT,
 	getConfig,
 	green,
-	hasConfigFile,
 	info,
 	isCurrentCacheType,
 	isLogfeatureEnabled,
@@ -23,13 +25,13 @@ import {
 	log,
 	logger,
 	memoize,
+	print,
 	verboseError,
 } from "./functions"
 import {
 	getGlobalConfigOption,
 	getGlobalOption,
 	getServerOption,
-	logGlobalOptions,
 	ROOT_PATH,
 	setGlobalConfigOption,
 } from "./config"
@@ -39,7 +41,7 @@ import { cache, statControll, stats } from "./db"
 var args = process.argv.slice(2),
 	app = new Hono(),
 	server: Server,
-	watcher: fs.FSWatcher,
+	watcher: undefined | (() => void),
 	intervalID: Timer,
 	/** Exit function from the alternate buffer
 	 * `undefined` - not in alternate buffer
@@ -120,7 +122,7 @@ app.get("/:id", async (c) => {
 		squeeze: squeezeRaw,
 	})
 
-	// console.log("Request params: ", { userID, shift, size, resize, fps })
+	// print("Request params: ", { userID, shift, size, resize, fps })
 	if (notValidParams) {
 		statControll.response.common.increment.failure()
 		return notValidParams
@@ -156,17 +158,17 @@ app.get("/:id", async (c) => {
 						| PromiseLike<void | Uint8Array>,
 				) => promise.promise.then(fn)
 
-			console.log("Gif:")
+			print("Gif:")
 			if (isCurrentCacheType("code")) {
 				if (cache.gif.code.has(petpetHash)) {
-					console.log(green("gif in code cache"))
+					print(green("gif in code cache"))
 					ready(cache.gif.code.get(petpetHash)!.gif)
 					resolved ||= true
 				}
 			}
 			if (isCurrentCacheType("fs")) {
 				if (!resolved && cache.gif.fs.has(petpetHash)) {
-					console.log(green("gif in fs cache"))
+					print(green("gif in fs cache"))
 					cache.gif.fs
 						.get(petpetHash)
 						.then((gif) => (gif instanceof Uint8Array ? ready(gif) : void 0))
@@ -175,14 +177,14 @@ app.get("/:id", async (c) => {
 			}
 
 			if (!resolved && cache.gif.queue.has(petpetHash)) {
-				console.log(green("gif in queue"))
+				print(green("gif in queue"))
 				addCallback(ready)
 				promise.resolve(cache.gif.queue.get(petpetHash))
 				resolved ||= true
 			}
 			if (isCurrentCacheType("code")) {
 				if (!resolved && cache.avatar.code.has(userID)) {
-					console.log(green("avatar in code cache"))
+					print(green("avatar in code cache"))
 					addCallback((png) =>
 						cache.gif.queue.add(petpetHash, png, petpetParams).then(ready),
 					)
@@ -192,7 +194,7 @@ app.get("/:id", async (c) => {
 			}
 			if (isCurrentCacheType("fs")) {
 				if (!resolved && cache.avatar.fs.has(userID)) {
-					console.log(green("avatar in fs cache"))
+					print(green("avatar in fs cache"))
 					addCallback((png) =>
 						cache.gif.queue.add(petpetHash, png, petpetParams).then(ready),
 					)
@@ -205,7 +207,7 @@ app.get("/:id", async (c) => {
 				}
 			}
 			if (!resolved && cache.avatar.queue.has(userID)) {
-				console.log(green("avatar in queue"))
+				print(green("avatar in queue"))
 				addCallback((png) => cache.gif.queue.add(petpetHash, png, petpetParams).then(ready))
 				cache.avatar.queue.get(userID)!.then(
 					(png) => promise.resolve(png),
@@ -216,7 +218,7 @@ app.get("/:id", async (c) => {
 				)
 				resolved ||= true
 			} else if (!resolved) {
-				console.log(green("feting avatar"))
+				print(green("feting avatar"))
 				addCallback(ready)
 				cache.gif.queue.addWithAvatar(petpetHash, petpetParams).then(
 					(gif) => promise.resolve(gif),
@@ -281,17 +283,17 @@ app.get("/avatar/:id", async (c) => {
 							| PromiseLike<Uint8Array>
 							| PromiseLike<void | Uint8Array>,
 					) => promise.promise.then(fn)
-				console.log("Avatar:")
+				print("Avatar:")
 				if (isCurrentCacheType("code")) {
 					if (!resolved && cache.avatar.code.has(id)) {
-						console.log(green("avatar in code cache"))
+						print(green("avatar in code cache"))
 						ready(cache.avatar.code.get(id)!.avatar)
 						resolved ||= true
 					}
 				}
 				if (isCurrentCacheType("fs")) {
 					if (!resolved && cache.avatar.fs.has(id)) {
-						console.log(green("avatar in fs cache"))
+						print(green("avatar in fs cache"))
 						cache.avatar.fs
 							.get(id)!
 							.then((avatar) =>
@@ -301,14 +303,14 @@ app.get("/avatar/:id", async (c) => {
 					}
 				}
 				if (!resolved && cache.avatar.queue.has(id)) {
-					console.log(green("avatar in queue"))
+					print(green("avatar in queue"))
 					cache.avatar.queue.get(id)!.then(ready, (response) => {
 						statControll.response.common.increment.failure()
 						resolve(response)
 					})
 					resolved ||= true
 				} else if (!resolved) {
-					console.log(green("feting avatar"))
+					print(green("feting avatar"))
 					addCallback(ready)
 					cache.avatar.queue.add(id).then(
 						(gif) => promise.resolve(gif),
@@ -340,33 +342,36 @@ function setupWatch() {
 	// if `useConfig` global option is enabled,
 	// then start the server with `restart: true` value for indication
 	// proposes to default all values, and re-load flags and config file
-	return fs
-		.watch(ROOT_PATH, { persistent: true }, (_, file) => {
-			if (getGlobalConfigOption("useConfig") && /^config\.toml~?$/.test(file ?? "")) {
-				var eventType = "changed" as Parameters<typeof restart>[0],
-					hasConfig = memoize(hasConfigFile)
-				if (getGlobalConfigOption("config")) {
-					if (hasConfig.value) {
-						eventType = "changed"
-					} else {
-						eventType = "deleted"
-						setGlobalConfigOption("config", false)
-					}
-				} else if (hasConfig.value) {
-					eventType = "created"
-					setGlobalConfigOption("config", true)
-				}
+	var filepath = join(ROOT_PATH, "config.toml"),
+		listener = (curr: Stats, prev: Stats) => {
+			if (curr.mtime.getTime() === 0) {
+				// File was deleted
 
-				restart(eventType)
+				if (getGlobalConfigOption("useConfig")) {
+					setGlobalConfigOption("config", false)
+					restart("deleted")
+				}
+			} else if (prev.mtime.getTime() === 0) {
+				// File was created
+				if (getGlobalConfigOption("useConfig")) {
+					setGlobalConfigOption("config", true)
+					restart("created")
+				}
+			} else if (curr.mtime > prev.mtime) {
+				// File was modified
+				if (getGlobalConfigOption("useConfig")) {
+					restart("changed")
+				}
 			}
-		})
-		.on("error", (e) => {
-			verboseError(
-				e,
-				error("Error while watching config files for change:\n"),
-				error("Error while watching config files for change"),
-			)
-		})
+		}
+	watchFile(filepath, { interval: 1000 }, listener).on("error", (e) => {
+		verboseError(
+			e,
+			error("Error while watching config files for change:\n"),
+			error("Error while watching config files for change"),
+		)
+	})
+	return () => unwatchFile(filepath, listener)
 }
 
 function handleCacheInterval() {
@@ -376,7 +381,10 @@ function handleCacheInterval() {
 }
 
 function handleWatcher() {
-	if (watcher) watcher?.close?.()
+	if (watcher) {
+		watcher()
+		watcher = undefined
+	}
 	if (getGlobalOption("watch")) {
 		watcher = setupWatch()
 	}

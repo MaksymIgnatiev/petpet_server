@@ -218,9 +218,7 @@ export function resetGlobalOptionsHandler(prepareState = true) {
 	resetGlobalOptions()
 	prepareState && setState("ready")
 }
-export function logGlobalOptions() {
-	console.dir(globalOptions, { depth: null, colors: true })
-}
+
 function resetGlobalOptions(): void
 function resetGlobalOptions(root: Record<string, any>, objToSet: Record<string, any>): void
 function resetGlobalOptions(root?: Record<string, any>, objToSet?: Record<string, any>) {

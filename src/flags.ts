@@ -9,13 +9,13 @@ import {
 	memoize,
 	normalizeLogOption,
 	parseLogOption,
+	print,
 } from "./functions"
 import {
 	getGlobalOption,
 	getServerOption,
 	getVersion,
 	globalOptionsDefault,
-	logGlobalOptions,
 	setGlobalConfigOption,
 	setGlobalOption,
 	setLogOption,
@@ -128,7 +128,7 @@ export function setupFlagHandlers() {
 		description: "Display version and exit",
 		extendedDescription: `Display version and exit. Current version: ${green(getVersion())}`,
 		handler() {
-			console.log(getVersion())
+			print(getVersion())
 			exit = true
 		},
 	})
@@ -367,7 +367,7 @@ export function setupFlagHandlers() {
 		description: "test, nothing spesial",
 		extendedDescription: "",
 		handler() {
-			console.log(
+			print(
 				green(`[${formatDate(new Date(), getGlobalOption("timestampFormat"))}]`) +
 					"handler called",
 			)
@@ -491,12 +491,12 @@ export function processFlags(argList: string[]) {
 	}
 
 	if (isError) {
-		console.log(errorMsg)
+		print(errorMsg)
 	}
 	if (isFlagError) {
-		console.log(readHelpPage)
+		print(readHelpPage)
 	} else if (!isError && !isFlagError && exit) {
-		console.log(printMsg)
+		print(printMsg)
 	}
 	if (isError || isFlagError || exit) process.exit()
 	setState("ready")

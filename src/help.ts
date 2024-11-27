@@ -46,16 +46,16 @@ var flagsGap = 1,
 if (process.argv[1].match(/help\.ts$/)) {
 	if (process.argv[2] === "-f") {
 		if (process.env.npm_config_user_agent?.includes("bun")) {
-			process.stdout.write("\x1b[1A\x1b[2K")
+			if (process.stdout.isTTY) process.stdout.write("\x1b[1A\x1b[2K")
 		}
 		// Running this file directly will not load the entry point to process flags => less CPU usage :)
 
 		var flag = process.argv[3]?.toLowerCase().trim()
 		if (flag === undefined || helpFlags.includes(flag as (typeof helpFlags)[number]))
-			console.log(main(flag as (typeof helpFlags)[number]))
-		else console.log(error(`Unknown help section: ${green(flag)}`))
+			print(main(flag as (typeof helpFlags)[number]))
+		else print(error(`Unknown help section: ${green(flag)}`))
 	} else {
-		console.log(
+		print(
 			warning(
 				`File ${green("./src/help.ts")} is a utility file, and is not intended to be run directly. If you realy need to run it, add '${green("-f")}' flag`,
 			),
@@ -65,7 +65,7 @@ if (process.argv[1].match(/help\.ts$/)) {
 }
 
 import { flagObjects, setupFlagHandlers } from "./flags"
-import { error, green, warning } from "./functions"
+import { error, green, print, warning } from "./functions"
 type FlagRest = [string | string[], string] | string
 type Section<T extends string | string[] = string, V extends FlagRest = FlagRest> = Map<T, V>
 
