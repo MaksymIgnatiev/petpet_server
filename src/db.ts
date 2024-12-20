@@ -8,15 +8,12 @@ import {
 	decompress,
 	error,
 	fileNotForRunning,
-	green,
 	isCurrentCacheType,
 	log,
-	memoize,
 	updateObject,
 	verboseError,
-	yellow,
 } from "./functions"
-import { fetchAvatar, generatePetPet } from "./petpet"
+import { generatePetPet } from "./petpet"
 import type {
 	AvatarQueue,
 	Avatars,
@@ -29,6 +26,7 @@ import type {
 	Hash,
 	Stats,
 } from "./types"
+import { fetchAvatar } from "./avatars"
 
 type BufferType = "gif" | "avatar"
 

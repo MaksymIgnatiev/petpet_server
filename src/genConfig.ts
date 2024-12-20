@@ -52,14 +52,10 @@ var toml = "",
 
 import { join } from "path"
 import { fileNotForRunning, memoize } from "./functions"
-import type {
-	AllGlobalConfigOptions,
-	BaseConfigOptions,
-	FilteredObjectConfigProps,
-	FilterObjectProps,
-	Values,
-} from "./types"
+import type { AllGlobalConfigOptions, BaseConfigOptions, FilterObjectProps, Values } from "./types"
 import { globalOptionsDefault, ROOT_PATH } from "./config"
+
+type ObjectProps = FilterObjectProps<BaseConfigOptions, Record<string, any>>
 
 export function genConfig() {
 	if (!toml.length) {
@@ -67,7 +63,7 @@ export function genConfig() {
 		for (var [keyRaw, value] of Object.entries(config)) {
 			var key = keyRaw as keyof typeof config
 			if (typeof value === "object" && !Array.isArray(value))
-				addObjToToml(key as keyof FilteredObjectConfigProps, value)
+				addObjToToml(key as keyof ObjectProps, value)
 			else addPropToToml(key, config[key] as string)
 		}
 	}
@@ -106,7 +102,7 @@ function addObjToToml<N extends keyof ObjDescriptions, T extends ObjDescriptions
 	obj: T,
 ) {
 	var value,
-		key: keyof Values<FilteredObjectConfigProps> | "description",
+		key: keyof Values<ObjectProps> | "description",
 		dv: { readonly value: string },
 		description = (config as ObjDescriptions)[name].description,
 		descriptionLines = formatDescription(description)
@@ -117,9 +113,7 @@ function addObjToToml<N extends keyof ObjDescriptions, T extends ObjDescriptions
 
 	for (var [keyRaw, description] of Object.entries(obj)) {
 		key = keyRaw as typeof key
-		value = formatValue(
-			globalOptionsDefault[name][key as keyof Values<FilteredObjectConfigProps>],
-		)
+		value = formatValue(globalOptionsDefault[name][key as keyof Values<ObjectProps>])
 		dv = memoize(defaultValue, value)
 		if (key !== "description") {
 			descriptionLines = formatDescription(description)

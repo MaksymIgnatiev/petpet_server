@@ -14,7 +14,7 @@ class Config implements GlobalOptions {
 	cacheTime!: GlobalOptions["cacheTime"]
 	cacheType!: GlobalOptions["cacheType"]
 	compression!: GlobalOptions["compression"]
-	config!: GlobalOptions["config"]
+	inAlternate!: GlobalOptions["inAlternate"]
 	clearOnRestart!: GlobalOptions["clearOnRestart"]
 	errors!: GlobalOptions["errors"]
 	logFeatures!: GlobalOptions["logFeatures"]
@@ -76,7 +76,7 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		cacheType: "code",
 		compression: true,
 		clearOnRestart: false, // true
-		config: false,
+		inAlternate: false,
 		errors: true,
 		logFeatures: false,
 		quiet: false,
@@ -111,7 +111,14 @@ var globalOptions: GlobalOptions = new Config(),
 
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
-import { hasNullable, sameType, fileNotForRunning, green } from "./functions"
+import {
+	hasNullable,
+	sameType,
+	fileNotForRunning,
+	green,
+	exitAlternateBuffer,
+	print,
+} from "./functions"
 import type {
 	AdditionalGlobalOptions,
 	AllGlobalConfigOptions,
@@ -126,6 +133,7 @@ import type {
 	IndexOf,
 	Values,
 } from "./types"
+import { stdin } from "bun"
 
 function applyGlobalProp<O extends Values<FilteredObjectConfigProps>>(obj: O) {
 	return Object.fromEntries(
@@ -219,7 +227,9 @@ export function resetGlobalOptionsHandler(prepareState = true) {
 	prepareState && setState("ready")
 }
 
+/** Resets the global options */
 function resetGlobalOptions(): void
+/** You shouldn't use this overload */
 function resetGlobalOptions(root: Record<string, any>, objToSet: Record<string, any>): void
 function resetGlobalOptions(root?: Record<string, any>, objToSet?: Record<string, any>) {
 	root ??= globalOptionsDefault
@@ -414,3 +424,14 @@ export var setServerOption = createGlobalOptionObjectSetter("server"),
 	getServerOption = createGlobalOptionObjectGetter("server"),
 	setLogOption = createGlobalOptionObjectSetter("logOptions"),
 	getLogOption = createGlobalOptionObjectGetter("logOptions")
+
+var SIGTSTP = () => {
+	process.removeListener("SIGTSTP", SIGTSTP)
+	process.stdout.write("\x1b[?1049l")
+	if (getGlobalConfigOption("inAlternate")) {
+		exitAlternateBuffer()
+	}
+	process.kill(process.pid, "SIGTSTP")
+}
+
+process.on("SIGTSTP", SIGTSTP)

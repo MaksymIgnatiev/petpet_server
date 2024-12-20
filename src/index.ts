@@ -1,22 +1,25 @@
 if (process.env.npm_config_user_agent?.includes("bun")) {
-	if (process.stdout.isTTY) process.stdout.write("\x1b[1A\x1b[2K")
+	// if it was a script - clear the line above (`$ bun run src/index.ts`)
+	if (process.stdout.isTTY) process.stdout.write("\x1b[1A\x1b[2K") // 1A - move cursor one line up; 2K - clear the entire line
 }
 
-import { stdout } from "process"
-import { Stats, unwatchFile, watchFile, type StatWatcher } from "fs"
 import { Hono, type Context, type TypedResponse } from "hono"
-import type { Server } from "bun"
 import { join } from "path"
+import { Stats, unwatchFile, watchFile } from "fs"
+import { stdout } from "process"
+import type { Server } from "bun"
 
 import { defaultPetPetParams } from "./petpet"
-import type { PetPetParams, Hash } from "./types"
+import type { PetPetParams, Hash, AlwaysResolvingPromise, ChechValidPetPetParams } from "./types"
 import {
 	chechCache,
 	checkValidRequestParams,
+	colorValue,
 	enterAlternateBuffer,
 	error,
 	EXIT,
 	getConfig,
+	gray,
 	green,
 	info,
 	isCurrentCacheType,
@@ -24,19 +27,12 @@ import {
 	isStringNumber,
 	log,
 	logger,
-	memoize,
 	print,
 	verboseError,
 } from "./functions"
-import {
-	getGlobalConfigOption,
-	getGlobalOption,
-	getServerOption,
-	ROOT_PATH,
-	setGlobalConfigOption,
-} from "./config"
-import { processFlags } from "./flags"
 import { cache, statControll, stats } from "./db"
+import { getGlobalConfigOption, getGlobalOption, getServerOption, ROOT_PATH } from "./config"
+import { processFlags } from "./flags"
 
 var args = process.argv.slice(2),
 	app = new Hono(),
@@ -98,45 +94,75 @@ app.use("/:id", async (c, next) => {
 
 app.get("/:id", async (c) => {
 	var userID = c.req.param("id"),
-		shiftRaw = c.req.query("shift"),
 		update = !!c.req.url.match(/[?&]upd(&|=|$)/),
+		shiftRaw = c.req.query("shift"),
 		sizeRaw = c.req.query("size"),
+		gifsizeRaw = c.req.query("gifsize"),
 		resizeRaw = c.req.query("resize"),
 		fpsRaw = c.req.query("fps"),
 		squeezeRaw = c.req.query("squeeze"),
+		objectsRaw = c.req.query("objects"),
 		shiftX = defaultPetPetParams.shiftX,
 		shiftY = defaultPetPetParams.shiftY,
 		size = defaultPetPetParams.size,
+		gifsize = defaultPetPetParams.gifsize,
 		fps = defaultPetPetParams.fps,
 		resizeX = defaultPetPetParams.resizeX,
 		resizeY = defaultPetPetParams.resizeY,
-		squeeze = defaultPetPetParams.squeeze
+		squeeze = defaultPetPetParams.squeeze,
+		objects = defaultPetPetParams.objects
 
 	if (!isStringNumber(userID)) return noContent(c)
 
-	var notValidParams = checkValidRequestParams(c, {
-		shift: shiftRaw,
-		size: sizeRaw,
-		resize: resizeRaw,
-		fps: fpsRaw,
-		squeeze: squeezeRaw,
-	})
+	var params: ChechValidPetPetParams = {
+			shift: shiftRaw,
+			size: sizeRaw,
+			gifsize: gifsizeRaw,
+			resize: resizeRaw,
+			fps: fpsRaw,
+			squeeze: squeezeRaw,
+			objects: objectsRaw,
+		},
+		notValidParams = checkValidRequestParams(c, params)
 
-	// print("Request params: ", { userID, shift, size, resize, fps })
 	if (notValidParams) {
 		statControll.response.common.increment.failure()
 		return notValidParams
+	}
+
+	if (isLogfeatureEnabled("params")) {
+		var requestParams: string[] = []
+		for (var [paramKey, paramValue] of Object.entries(params)) {
+			if (paramValue !== undefined) {
+				requestParams.push(`${gray(paramKey)}: ${colorValue(paramValue)}`)
+			}
+		}
+		print(`${"Request params:"} ${requestParams.join(`${gray(",")} `)}`)
 	}
 
 	// at this point, each parameter is checked with `checkValidRequestParams` function, and can be used if it's exist
 	if (shiftRaw !== undefined) [shiftX, shiftY] = shiftRaw.split("x").map(Number)
 	if (resizeRaw !== undefined) [resizeX, resizeY] = resizeRaw.split("x").map(Number)
 	if (sizeRaw !== undefined) size = +sizeRaw
+	if (gifsizeRaw !== undefined) gifsize = +gifsizeRaw
 	if (fpsRaw !== undefined) fps = +fpsRaw
 	if (squeezeRaw !== undefined) squeeze = +squeezeRaw
+	if (objectsRaw !== undefined)
+		objects = objectsRaw.includes(",") ? "both" : (objectsRaw as typeof objects)
+	else objects = "both"
 
-	var petpetHash: Hash = `${userID}-${shiftX}x${shiftY}-${resizeX}x${resizeY}-${size}-${fps}-${squeeze}`,
-		petpetParams: PetPetParams = { shiftX, shiftY, size, fps, resizeX, resizeY, squeeze }
+	var petpetHash: Hash = `${userID}-${shiftX}x${shiftY}-${resizeX}x${resizeY}-${squeeze}-${size}-${gifsize}-${fps}-${objects}`,
+		petpetParams: Partial<PetPetParams> = {
+			shiftX,
+			shiftY,
+			size,
+			fps,
+			resizeX,
+			resizeY,
+			squeeze,
+			gifsize,
+			objects,
+		}
 
 	try {
 		return new Promise<Response>((resolve) => {
@@ -159,15 +185,15 @@ app.get("/:id", async (c) => {
 				) => promise.promise.then(fn)
 
 			print("Gif:")
-			if (isCurrentCacheType("code")) {
+			if (!update && isCurrentCacheType("code")) {
 				if (cache.gif.code.has(petpetHash)) {
 					print(green("gif in code cache"))
 					ready(cache.gif.code.get(petpetHash)!.gif)
 					resolved ||= true
 				}
 			}
-			if (isCurrentCacheType("fs")) {
-				if (!resolved && cache.gif.fs.has(petpetHash)) {
+			if (!update && isCurrentCacheType("fs")) {
+				if ((!resolved || isCurrentCacheType("both")) && cache.gif.fs.has(petpetHash)) {
 					print(green("gif in fs cache"))
 					cache.gif.fs
 						.get(petpetHash)
@@ -176,13 +202,13 @@ app.get("/:id", async (c) => {
 				}
 			}
 
-			if (!resolved && cache.gif.queue.has(petpetHash)) {
+			if (!update && !resolved && cache.gif.queue.has(petpetHash)) {
 				print(green("gif in queue"))
 				addCallback(ready)
 				promise.resolve(cache.gif.queue.get(petpetHash))
 				resolved ||= true
 			}
-			if (isCurrentCacheType("code")) {
+			if (!update && isCurrentCacheType("code")) {
 				if (!resolved && cache.avatar.code.has(userID)) {
 					print(green("avatar in code cache"))
 					addCallback((png) =>
@@ -192,8 +218,8 @@ app.get("/:id", async (c) => {
 					resolved ||= true
 				}
 			}
-			if (isCurrentCacheType("fs")) {
-				if (!resolved && cache.avatar.fs.has(userID)) {
+			if (!update && isCurrentCacheType("fs")) {
+				if ((!resolved || isCurrentCacheType("both")) && cache.avatar.fs.has(userID)) {
 					print(green("avatar in fs cache"))
 					addCallback((png) =>
 						cache.gif.queue.add(petpetHash, png, petpetParams).then(ready),
@@ -206,7 +232,7 @@ app.get("/:id", async (c) => {
 					resolved ||= true
 				}
 			}
-			if (!resolved && cache.avatar.queue.has(userID)) {
+			if (!update && !resolved && cache.avatar.queue.has(userID)) {
 				print(green("avatar in queue"))
 				addCallback((png) => cache.gif.queue.add(petpetHash, png, petpetParams).then(ready))
 				cache.avatar.queue.get(userID)!.then(
@@ -346,22 +372,13 @@ function setupWatch() {
 		listener = (curr: Stats, prev: Stats) => {
 			if (curr.mtime.getTime() === 0) {
 				// File was deleted
-
-				if (getGlobalConfigOption("useConfig")) {
-					setGlobalConfigOption("config", false)
-					restart("deleted")
-				}
+				if (getGlobalConfigOption("useConfig")) restart("deleted")
 			} else if (prev.mtime.getTime() === 0) {
 				// File was created
-				if (getGlobalConfigOption("useConfig")) {
-					setGlobalConfigOption("config", true)
-					restart("created")
-				}
+				if (getGlobalConfigOption("useConfig")) restart("created")
 			} else if (curr.mtime > prev.mtime) {
 				// File was modified
-				if (getGlobalConfigOption("useConfig")) {
-					restart("changed")
-				}
+				if (getGlobalConfigOption("useConfig")) restart("changed")
 			}
 		}
 	watchFile(filepath, { interval: 1000 }, listener).on("error", (e) => {
@@ -446,8 +463,9 @@ async function restart(eventType: "created" | "changed" | "deleted") {
 	})
 }
 
-async function main(reload?: boolean, log?: boolean): Promise<string>
-async function main(r = false, l = true) {
+/** Process flags (if exist), try to get and parse the config file, and after init all other things based on the result */
+function main(reload?: boolean, log?: boolean): AlwaysResolvingPromise<string>
+function main(r = false, l = true): AlwaysResolvingPromise<string> {
 	var printText = ""
 	// Do not process anything if there are no flags => less CPU & RAM usage and faster startup time :)
 	if (args.length) printText = processFlags(args)
@@ -458,7 +476,7 @@ async function main(r = false, l = true) {
 			// logGlobalOptions()
 			if (l) listening()
 		})
-		.then(() => printText)
+		.then(() => printText) as AlwaysResolvingPromise<string>
 }
 
 main()

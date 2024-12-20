@@ -5,7 +5,24 @@ import type { Avatar, PetPet } from "./db"
 import { fileNotForRunning } from "./functions"
 
 // ---- Utility types ----
+export type PositiveNumber = number
+export type Positive<T extends number> = `${T}` extends `${infer C}${infer _}`
+	? C extends "-"
+		? never
+		: number
+	: never
+export type ArrayRange<L extends number, Acc extends any[] = []> = Acc["length"] extends L
+	? Acc
+	: ArrayRange<L, [...Acc, Acc["length"]]>
+export type RangeType<S extends number = number, E extends number = number> = number | S | E
+export type Range<
+	Start extends number,
+	End extends number,
+	T extends any[] = ArrayRange<Start>,
+> = T["length"] extends End ? T["length"] : T["length"] | Range<Start, End, [...T, 0]>
 
+export type ANSIColor = ANSIRGB | ANSIColorShort
+export type ANSIColorShort = `$;5;${number}`
 export type ANSIRGB<
 	R extends number = number,
 	G extends number = number,
@@ -58,7 +75,8 @@ export type UnionToTuple<T, A extends any[] = []> = [T] extends [never]
 	: UnionToTuple<Exclude<T, Last<T>>, [Last<T>, ...A]>
 
 /** Join strings with a separator */
-export type Join<Tuple extends string[], Separator extends string = ""> = Tuple extends [
+export type Join<Tuple extends readonly string[], Separator extends string = ""> = Tuple extends [
+	// need a fix at `readonly`
 	infer First extends string,
 	...infer Rest extends string[],
 ]
@@ -177,8 +195,8 @@ export type BaseConfigOptions = {
 export type AdditionalGlobalOptions = {
 	/** Use the configuration files or not (default=`true`) */
 	useConfig: boolean
-	/** Indicates that config file is specified or not */
-	config: boolean
+	/** In alternate buffer or not */
+	inAlternate: boolean
 }
 
 type AllGlobalConfigOptionsBase = BaseConfigOptions & AdditionalGlobalOptions
@@ -243,7 +261,6 @@ export type LogLevel = 0 | 1 | 2 | 3 | 4 | 5
 
 export type LogOptionLongCombination = Combinations<LogOptionLong, ",">
 export type LogOptionShortCombination = Combinations<LogOptionShort, ",">
-type LogOptionCombination = string
 export type LogOptionLong = keyof LogOptions
 export type LogOptionShort = {
 	[S in LogOptionLong]: S extends `${infer C}${infer _}` ? C : never
@@ -316,12 +333,14 @@ export type Flag<T extends FlagValueUnion> = {
 
 export type LogDependency = "info" | "error" | "warning" | LogLevel | LogOptionLongCombination
 
-export type ChechValidParamsParam = {
+export type ChechValidPetPetParams = {
 	shift?: string
 	resize?: string
 	size?: string
+	gifsize?: string
 	fps?: string
 	squeeze?: string
+	objects?: string
 }
 
 export type Resolve<T = any> = (value: T | PromiseLike<T>) => void
@@ -335,9 +354,13 @@ export type Cache = {
 		/** Operations with queue */
 		queue: {
 			/** Add the generation task to queue with fething avatar */
-			addWithAvatar: (hash: Hash, params: PetPetParams, size?: number) => Promise<Uint8Array>
+			addWithAvatar: (
+				hash: Hash,
+				params: Partial<PetPetParams>,
+				size?: number,
+			) => Promise<Uint8Array>
 			/** Add the generation task to queue */
-			add: (hash: Hash, gif: Uint8Array, params: PetPetParams) => Promise<Uint8Array>
+			add: (hash: Hash, gif: Uint8Array, params: Partial<PetPetParams>) => Promise<Uint8Array>
 			/** Check if generation task is in the queue */
 			has: (hash: Hash) => boolean
 			/** Get the promise with GIF generation task */
@@ -480,8 +503,9 @@ export type Stats = {
 export type HashPart = string
 export type HashTwoParameters = `${string}x${string}`
 export type UID = string
+export type PetPetObject = PetPetParams["objects"]
 export type Hash =
-	`${UID}-${HashTwoParameters}-${HashTwoParameters}-${HashPart}-${HashPart}-${HashPart}`
+	`${UID}-${HashTwoParameters}-${HashTwoParameters}-${HashPart}-${HashPart}-${HashPart}-${HashPart}-${PetPetObject}`
 
 export type PetPetType = {
 	hash: Hash
@@ -499,34 +523,24 @@ export type PetPets = Map<Hash, PetPet>
 export type Avatars = Map<string, Avatar>
 export type AvatarQueue = Map<string, Promise<Uint8Array>>
 export type PetPetQueue = Map<Hash, Promise<Uint8Array>>
-
 export type PetPetParams = {
 	/** Shift the base image by `X` pixels on the X axis (horizontal) (default=`0`px) */
-	shiftX?: number
+	shiftX: number
 	/** Shift the base image by `Y` pixels on the Y axis (vertical) (default=`0`px) */
-	shiftY?: number
+	shiftY: number
 	/** Size of the base image (positive integer) (default=`80`px) */
-	size?: number
-	/** Desire FPS for gif (default=`16`)
+	size: number
+	/** Size of the GIF (positive integer) (default=`80`px) */
+	gifsize: PositiveNumber
+	/** Desire FPS for GIF (default=`16`)
 	 * @see https://www.fileformat.info/format/gif/egff.htm */
-	fps?: number
+	fps: RangeType<1, 50>
 	/** Resize image on X axis from center (default=`0`px) */
-	resizeX?: number
+	resizeX: number
 	/** Resize image on Y axis from center (default=`0`px) */
-	resizeY?: number
+	resizeY: number
 	/** Squeeze factor. How mush to squeeze the image in the middle of the animation (hand down) (default=`15`px) */
-	squeeze?: number
+	squeeze: number
+	/** What objects to include in GIF: only `"hand"`, only `"avatar"`, or `"both"` (default=`"both"`) */
+	objects: "hand" | "avatar" | "both"
 }
-
-// ----- Config files types -----
-
-export type TOMLConfig = PartialAllObjectsProps<BaseConfigOptions>
-
-export type TOMLEntries = [keyof BaseConfigOptions, BaseConfigOptions[keyof BaseConfigOptions]][]
-
-export type FilterConfigOptionsByType<T> = FilterObjectProps<BaseConfigOptions, T>
-
-export type FilteredBooleanConfigProps = FilterConfigOptionsByType<boolean>
-export type FilteredStringConfigProps = FilterConfigOptionsByType<string>
-export type FilteredNumberConfigProps = FilterConfigOptionsByType<number>
-export type FilteredObjectConfigProps = FilterConfigOptionsByType<object>

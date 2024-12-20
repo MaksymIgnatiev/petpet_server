@@ -6,8 +6,9 @@ import fs from "fs"
 import { join } from "path"
 import type {
 	AlwaysResolvingPromise,
+	ANSIColor,
 	ANSIRGB,
-	ChechValidParamsParam,
+	ChechValidPetPetParams,
 	GetLogOption,
 	GlobalOptions,
 	LogDependency,
@@ -30,6 +31,7 @@ import {
 import { TOML } from "bun"
 import { parseToml } from "./parseConfigFile"
 import { cache } from "./db"
+import { objectsTypes } from "./petpet"
 
 export var info = customLogTag("Info", cyan),
 	error = customLogTag("Error", red),
@@ -85,7 +87,11 @@ export function customLogTag<S extends string, C extends ANSIRGB | ((text: any) 
 		return result
 	}
 }
-
+export function customColor(color: ANSIColor) {
+	return function c(text: any) {
+		return `\x1b[${color}m${text}${NC}`
+	}
+}
 export function RGBToANSI<
 	R extends number = number,
 	G extends number = number,
@@ -94,22 +100,44 @@ export function RGBToANSI<
 	return `38;2;${rgb[0]};${rgb[1]};${rgb[2]}`
 }
 
-export function yellow(text: any) {
-	return `\x1b[33m${text}\x1b[0m`
-}
 export function red(text: any) {
-	return `\x1b[31m${text}\x1b[0m`
+	return `\x1b[31m${text}${NC}`
+}
+export function orange(text: any) {
+	return `\x1b[38;5;208m${text}${NC}`
+}
+export function yellow(text: any) {
+	return `\x1b[33m${text}${NC}`
 }
 export function green(text: any) {
-	return `\x1b[32m${text}\x1b[0m`
+	return `\x1b[32m${text}${NC}`
 }
-
 export function cyan(text: any) {
-	return `\x1b[36m${text}\x1b[0m`
+	return `\x1b[36m${text}${NC}`
+}
+export function purple(text: any) {
+	return `\x1b[35m${text}${NC}`
+}
+export function gray(text: any) {
+	return `\x1b[38;5;248m${text}${NC}`
+}
+export function string(text: any) {
+	return `\x1b[38;2;220;130;70m${text}${NC}`
 }
 
-export function purple(text: any) {
-	return `\x1b[35m${text}\x1b[0m`
+export function colorValue(value: any) {
+	var result = ""
+	if (isString(value)) {
+		if (isStringNumber(value) || isStringBoolean(value)) result = yellow(value)
+		else result = string(`'${value}'`)
+	} else if (isNumber(value) || isBoolean(value)) result = yellow(value)
+	else if (value === undefined) result = gray(undefined)
+	else if (value === null) result = gray(null)
+	else if (Array.isArray(value)) {
+		result = `[${value.map(colorValue).join(`${gray(",")} `)}]`
+	}
+
+	return result
 }
 
 export function EXIT(isInBuffer = false) {
@@ -117,50 +145,42 @@ export function EXIT(isInBuffer = false) {
 	process.exit()
 }
 
-/** Sets the terminal raw mode to `enabled`, enters the alternate buffer, and returns a cleanup function that sets the terminal raw mode to `disabled`, and exits the alternate buffer */
+/** Enters the alternate buffer, and returns a cleanup function that exits current session of the alternate buffer (listener attached) */
 export function enterAlternateBuffer() {
 	var command = ""
-	if (stdin.isTTY) {
+	if (stdout.isTTY)
 		try {
-			// stdin.setRawMode(true)
+			// set the terminal raw mode to true
+			stdin.setRawMode(true)
 		} catch (e) {
-			print("Failed to set raw mode:", e)
+			print("Failed to enter alternate buffer:", e)
 			process.exit()
 		}
-	}
 	try {
 		// enter alternate buffer, and move cursor to the left-top position
 		stdout.write("\x1b[?1049h\x1b[H")
+		setGlobalConfigOption("inAlternate", true)
 	} catch (e) {
-		print("Failed to enter alternate buffer:", e)
+		print("Failed to enter alternate buffer:\n", e)
 		process.exit()
 	}
 	/** Listen to a specific command or a sequense of characters to exit */
 	var listener = (buffer: Buffer) => {
-			print(`Buffer: ${buffer.join(", ")}`)
-			// <Ctrl> + c => SIGINT (interupt)
-			if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
-			// <Ctrl> + z => SIGTSTP (send to background) // not sure yes
-			else if (buffer.length === 1 && buffer[0] === 0x1a) {
-				exitAlternateBuffer()
-				process.kill(process.pid, "SIGTSTP")
-				process.kill(process.pid, "SIGTSTP")
-			} else {
-				var str = buffer.toString().trim()
-				if (str === "q") EXIT(true)
-				else if ((str === ":" || str === "Z") && command === "") command = str
-				else if ((str === "q" || str === "x") && command === ":") EXIT(true)
-				else if (str === "Z" && command === "Z") EXIT(true)
-				else if (command !== "") command = ""
-			}
-		},
-		keyListener = (
-			str: string,
-			key: { name: string; ctrl: boolean; meta: boolean; shift: boolean; sequence: string },
-		) => {
-			console.log({ str, key })
+		// <Ctrl> + c => SIGINT (interupt)
+		if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
+		// <Ctrl> + z => SIGTSTP (send to background) // not sure yes
+		else if (buffer.length === 1 && buffer[0] === 0x1a) {
+			// exitAlternateBuffer()
+			process.kill(process.pid, "SIGTSTP")
+		} else {
+			var str = buffer.toString().trim()
+			if (str === "q") EXIT(true)
+			else if ((str === ":" || str === "Z") && command === "") command = str
+			else if ((str === "q" || str === "x") && command === ":") EXIT(true)
+			else if (str === "Z" && command === "Z") EXIT(true)
+			else if (command !== "") command = ""
 		}
-	stdin.on("keypress", keyListener)
+	}
 	stdin.on("data", listener)
 	return () => {
 		stdin.removeListener("data", listener)
@@ -171,20 +191,21 @@ export function enterAlternateBuffer() {
 /** Safely exit alternate buffer
  * Use ONLY if there are no other ways! Preferable to use the cleanup function from `enterAlternateBuffer` function to not mess up with them */
 export function exitAlternateBuffer() {
-	if (stdin.isTTY) {
-		try {
-			stdin.setRawMode(false)
-		} catch (e) {
-			print("Failed to exit raw mode:\n", e)
-			process.exit()
-		}
-	}
 	try {
 		stdout.write("\x1b[?1049l")
+		setGlobalConfigOption("inAlternate", false)
 	} catch (e) {
 		print("Failed to exit alternate buffer:\n", e)
 		process.exit()
 	}
+	if (stdout.isTTY)
+		try {
+			// set the terminal raw mode to false
+			stdin.setRawMode(false)
+		} catch (e) {
+			print("Failed to enter alternate buffer:", e)
+			process.exit()
+		}
 }
 
 export function formatDelta<T extends number, A extends boolean = false>(
@@ -267,7 +288,8 @@ export function chechCache() {
 /** Checks if given cache type is the current type. If current === `"both"` - return true, else compare */
 export function isCurrentCacheType<T extends GlobalOptions["cacheType"]["value"]>(type: T) {
 	var ct = getGlobalOption("cacheType")
-	return ct === "both" ? true : ct === type
+	// if specified type is not "both", if current type is "both" - return true, else strict compare
+	return (ct === "both" && type !== "both") || ct === type
 }
 
 export function isLogfeatureEnabled(feature: LogOptionLong) {
@@ -279,7 +301,7 @@ export function isLogfeatureEnabled(feature: LogOptionLong) {
  * if option is number - tries to access the `logLevel` by this index -1, or undefined if not found */
 export function normalizeLogOption<O extends LogOptionShort | LogOptionLong | LogLevel>(
 	option: O,
-): GetLogOption<O> {
+): GetLogOption<O> | undefined {
 	return (
 		typeof option === "number"
 			? option < 6 && option > 0
@@ -316,7 +338,7 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
 						break
 					}
 				}
-			} else if (getLogOption(normalizeLogOption(dependency as LogStringOne))) doLog = true
+			} else if (getLogOption(normalizeLogOption(dependency as LogStringOne)!)) doLog = true
 		}
 		doLog && print(...args)
 	}
@@ -350,10 +372,10 @@ export function log<D extends LogDependency>(dependency: D, ...args: any[]) {
  * | "s/m/h"       | `seconds/minutes/hours`                                                                                   |
  * | "m:h"         | `minutes:hours`                                                                                           |
  *
- * @returns formated string with substituted values from the date
+ * @returns formated string with substituted values from the date, escaping all `\`
  */
 export function formatDate<F extends string>(
-	date: Date = new Date(),
+	date = new Date(),
 	format = getGlobalOption("timestampFormat") as F,
 ) {
 	var absolute = date.getTime() + (performance.now() % 1_000)
@@ -437,7 +459,7 @@ export function memoize<T, P extends any[]>(fn: (...args: P) => T, ...args: P) {
 
 export function checkValidRequestParams(
 	c: Context,
-	{ size, shift, resize, fps, squeeze }: ChechValidParamsParam,
+	{ size, gifsize, shift, resize, fps, squeeze, objects }: ChechValidPetPetParams,
 ) {
 	var badRequest = (message: string) =>
 		c.json(
@@ -454,6 +476,10 @@ export function checkValidRequestParams(
 		return badRequest("Invalid size parameter. Usage: '{Integer}'. Ex: '20', '90'")
 	if (size && /^\d+$/.test(size) && +size < 1)
 		return badRequest("Size parameter out of range. Use only positive values [1, +Infinity)")
+	if (gifsize && !/^\d+$/.test(gifsize))
+		return badRequest("Invalid gifsize parameter. Usage: '{Integer}'. Ex: '100', '150'")
+	if (gifsize && /^\d+$/.test(gifsize) && +gifsize < 1)
+		return badRequest("Gifsize parameter out of range. Use only positive values [1, +Infinity)")
 	if (shift && !/^-?\d+x-?\d+$/.test(shift))
 		return badRequest(
 			"Invalid shift parameter. Usage: '{Integer}x{Integer}'. Ex: '-5x20', '15x10'",
@@ -496,6 +522,16 @@ export function checkValidRequestParams(
 		return badRequest("Invalid squeeze parameter. Usage: '{Integer}'. Ex: '10', '-20'")
 	if (squeeze && /^-?\d+$/.test(squeeze) && isNaN(+squeeze))
 		return badRequest("Invalid squeeze parameter value. Use only integers")
+	if (objects) {
+		if (objects.includes(",") && !/^both|(hand|avatar),(?!\1)(hand|avatar)$/.test(objects))
+			return badRequest(
+				`Invalid specified objects: '${objects}'. Use 'both', one of these: '${objectsTypes.join("', '")}' or listed objects in conbination separated by coma. Ex: 'hand,avatar', 'avatar', 'hand', 'both'`,
+			)
+		else if (!/^both|(hand|avatar)$/.test(objects))
+			return badRequest(
+				`Invalid specified object: '${objects}'. Use 'both', one of these: '${objectsTypes.join("', '")}' or listed objects in conbination separated by coma. Ex: 'hand,avatar', 'avatar', 'hand', 'both'`,
+			)
+	}
 }
 
 export function updateObject<T extends Record<any, any>>(original: T, source: T) {
@@ -537,10 +573,15 @@ export function getConfig(reload = false): AlwaysResolvingPromise<boolean> {
 			Bun.file(join(ROOT_PATH, "config.toml"))
 				.text()
 				.then(TOML.parse)
-				.then(parseToml)
+				.then(parseToml, (e) => {
+					verboseError(
+						e,
+						error("Error while parsing TOML config file:\n"),
+						error("Error while parsing TOML config file"),
+					)
+				})
 				.then(
 					() => {
-						setGlobalConfigOption("config", true)
 						setState("ready")
 						resolve(true)
 					},
@@ -550,24 +591,22 @@ export function getConfig(reload = false): AlwaysResolvingPromise<boolean> {
 							error("Error while parsing toml configuration file:\n"),
 							error("Error while parsing toml configuration file"),
 						)
-						setGlobalConfigOption("config", false)
 						setState("ready")
 						resolve(false)
 					},
 				)
 		else {
-			setGlobalConfigOption("config", false)
 			setState("ready")
 			resolve(true)
 		}
 	})
 }
 
-export function sameType(value1: unknown, value2: unknown) {
+export function sameType<T1, T2>(value1: T1, value2: T2) {
 	return typeof value1 === typeof value2
 }
 
-/** Log the error message, and if `verboseErrors` global option is enabled - log first message. Else second */
+/** Log the error message depending on `verboseErrors` global option, if enabled - first message. Else second + error */
 export function verboseError(error: Error, onError: any, offError: any) {
 	if (getGlobalOption("verboseErrors")) log("error", onError, error)
 	else log("error", offError)
@@ -575,12 +614,12 @@ export function verboseError(error: Error, onError: any, offError: any) {
 
 export function parseLogOption(
 	option: string,
-): -1 | LogOptionLong[] | { duplicate: LogOptionLong } | { notFound: string } {
-	var result: LogOptionLong[] = []
+): -1 | (LogOptionLong | undefined)[] | { duplicate: LogOptionLong } | { notFound: string } {
+	var result: (LogOptionLong | undefined)[] = []
 	if (isStringNumber(option)) {
 		var level = +option
 		if (level < 0 || level > 6) return -1
-		for (; level > 0; level--) {
+		for (; level-- > 0; ) {
 			var o = normalizeLogOption(level as LogLevel)
 			if (o !== undefined) result.push(o)
 		}
@@ -589,7 +628,7 @@ export function parseLogOption(
 			var options = option.split(/,/g) as (LogOptionLong | LogOptionShort)[]
 			for (var opt of options) {
 				var final = normalizeLogOption(opt)
-				if (result.includes(final)) return { duplicate: final }
+				if (result !== undefined && result.includes(final)) return { duplicate: final! }
 				else result.push(final)
 			}
 		} else {
@@ -602,18 +641,24 @@ export function parseLogOption(
 }
 
 /** Print raw information to the stdout, depending on where the script is running (TTY or not, to include ANSI escape codes or not)
- * All arguments will be converted to string, joined with empty string (`""`), printed to the stdout with `\n` at the end to flush the buffer
- *
- */
+ * All arguments will be converted to string, joined with empty string (`""`), printed to the stdout with `\n` at the end to flush the buffer */
 export function print(...args: any[]) {
-	stdout.write(
-		args
-			.map(
-				stdout.isTTY
-					? String // if TTY => print as is
-					: // if not TTY => replace all ANSI escape codes
-						(e) => String(e).replace(/\u001b\[\??(\d+m|(\d+)?[a-zA-Z])/g, ""),
-			)
-			.join() + "\n",
+	// do it "asynchronous" to not block the main task queue
+	queueMicrotask(() =>
+		stdout.write(
+			args
+				.map(
+					stdout.isTTY
+						? String // if TTY => print as is
+						: // if not TTY => replace all ANSI escape codes
+							(e) => String(e).replace(/\u001b\[([\d;]+m|(\d+)?[a-zA-Z])/g, ""),
+				)
+				.join() + "\n",
+		),
 	)
+}
+export function formatObject(obj: Record<string, any>) {
+	return Object.entries(obj)
+		.map(([k, v]) => `${gray(k)}: ${colorValue(v)}`)
+		.join(`${gray(",")} `)
 }
