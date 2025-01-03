@@ -68,7 +68,7 @@ class Config implements GlobalOptions {
 
 export var globalOptionsDefault: AllGlobalConfigOptions = {
 		accurateTime: true, // false
-		alternateBuffer: true,
+		alternateBuffer: false, // true
 		avatars: true,
 		cacheTime: 15 * 60_000, // 15 minutes in `ms`
 		cacheCheckTime: 60_000, // 1  minute  in `ms`
@@ -96,7 +96,7 @@ export var globalOptionsDefault: AllGlobalConfigOptions = {
 		},
 		server: {
 			port: 3000,
-			host: "0.0.0.0", // "localhost"
+			host: "0.0.0.0",
 		},
 	},
 	/** Absolute path to the root of the project */
@@ -122,8 +122,8 @@ import {
 import type {
 	AdditionalGlobalOptions,
 	AllGlobalConfigOptions,
-	FilteredObjectConfigProps,
 	FilterObjectProps,
+	GlobalObjectOptions,
 	GlobalOptionProp,
 	GlobalOptionPropPriorityAll,
 	GlobalOptionPropPriorityLevel,
@@ -133,9 +133,8 @@ import type {
 	IndexOf,
 	Values,
 } from "./types"
-import { stdin } from "bun"
 
-function applyGlobalProp<O extends Values<FilteredObjectConfigProps>>(obj: O) {
+function applyGlobalProp<O extends Values<GlobalObjectOptions>>(obj: O) {
 	return Object.fromEntries(
 		Object.entries(obj).map(([key, value]) => [key, globalProp(value)]),
 	) as { [K in keyof O]: GlobalOptionProp<O[K]> }

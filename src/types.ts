@@ -14,7 +14,11 @@ export type Positive<T extends number> = `${T}` extends `${infer C}${infer _}`
 export type ArrayRange<L extends number, Acc extends any[] = []> = Acc["length"] extends L
 	? Acc
 	: ArrayRange<L, [...Acc, Acc["length"]]>
+
+// Just for indication proposes
 export type RangeType<S extends number = number, E extends number = number> = number | S | E
+
+// TypeScript can't handle more than 30
 export type Range<
 	Start extends number,
 	End extends number,
@@ -113,6 +117,7 @@ type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 		: GlobalOptionProp<O[K]>
 }
 
+// Options that server accepts via config file or flags. If you wish to add more options - do it here
 export type BaseConfigOptions = {
 	/** Enable microseconds notation in milliseconds values, and milliseconds notation in minutes (default=`false`) */
 	accurateTime: boolean
@@ -139,7 +144,7 @@ export type BaseConfigOptions = {
 	/** Options for logging (all default=`false`):
 	 * `rest`   - log requests and responses
 	 * `gif`    - log gif creation time & when gif was in cache
-	 * `params` - log each gif requesr params
+	 * `params` - log each gif request params
 	 * `cache`  - log cache related things (perform, cleanup, info, etc.)
 	 * `watch`  - log when server restarted due to changes in config file (`watch` option needs to be enabled)
 	 */
@@ -192,15 +197,25 @@ export type BaseConfigOptions = {
 	watch: boolean
 }
 
+// Additional options for the server that serve for identification purposes and cannot be configured using the configuration file or flags
 export type AdditionalGlobalOptions = {
-	/** Use the configuration files or not (default=`true`) */
+	/** Use the configuration files or not (changes after applying config file and flags)
+	 *
+	 * __Config option__ */
 	useConfig: boolean
-	/** In alternate buffer or not */
+	/** In alternate buffer or not (changes depending on the state of the program)
+	 *
+	 * __Config option__ */
 	inAlternate: boolean
 }
 
+// All options for the server, including special, that are not publicly accesed
 type AllGlobalConfigOptionsBase = BaseConfigOptions & AdditionalGlobalOptions
+
+// If ypu want to add more custom options - add them in `BaseConfigOptions` or `AdditionalGlobalOptions` if they need to be just for indication proposes and don\t have public access
 export type AllGlobalConfigOptions = Readonly<AllGlobalConfigOptionsBase>
+
+export type GlobalObjectOptions = FilterObjectProps<BaseConfigOptions, Record<string, any>>
 
 /** Options for global behaviour and settings */
 export type GlobalOptions = {
@@ -343,6 +358,7 @@ export type ChechValidPetPetParams = {
 	objects?: string
 }
 
+// ?
 export type Resolve<T = any> = (value: T | PromiseLike<T>) => void
 
 // ------ Gifs/Images ------
@@ -356,11 +372,15 @@ export type Cache = {
 			/** Add the generation task to queue with fething avatar */
 			addWithAvatar: (
 				hash: Hash,
-				params: Partial<PetPetParams>,
+				params?: Partial<PetPetParams>,
 				size?: number,
 			) => Promise<Uint8Array>
-			/** Add the generation task to queue */
-			add: (hash: Hash, gif: Uint8Array, params: Partial<PetPetParams>) => Promise<Uint8Array>
+			/** Add the generation task to queue with existing avatar */
+			add: (
+				hash: Hash,
+				gif: Uint8Array,
+				params?: Partial<PetPetParams>,
+			) => Promise<Uint8Array>
 			/** Check if generation task is in the queue */
 			has: (hash: Hash) => boolean
 			/** Get the promise with GIF generation task */
@@ -394,18 +414,18 @@ export type Cache = {
 			get: (hash: Hash) => AlwaysResolvingPromise<Uint8Array | undefined>
 			/** Checks the `./cache/gif` directory for a GIF with given hash */
 			has: (hash: Hash) => boolean
-			/** Removes the GIF and JSON files from `./cache/gif` directory and returns result of the operation as a booleana (`true` = success, `false` = failure)
+			/** Removes the GIF and JSON files from `./cache/gif` directory and returns result of the operation as a boolean (`true` = success, `false` = failure)
 			 * @returns {boolean} result of the operation (`true` = success, `false` = failure) */
 			remove: (hash: Hash) => boolean
 			/** Reands `./cache/gif` directory, checks if JSON file with given hash exists, reads the file, and checks if timestamp exeeded cache time (`true` = exeeded, `false` = not exeeded)
 			 * @returns {AlwaysResolvingPromise<boolean>} Always-resolving Promise with the result (`true` = exeeded, `false` = not exeeded) */
 			checkCacheTime: (hash: Hash) => AlwaysResolvingPromise<boolean>
-			/** Reands `./cache/gif` directory, and checks if both GIF and JSON files with given hash exists (`true` = exists, `false` = one/both files does not exist) */
+			/** Reands `./cache/gif` directory, and checks if both `GIF` and `JSON` files with given hash exists (`true` = exists, `false` = one/both files does not exist) */
 			checkSafe: (hash: Hash) => boolean
 			/** Array of all hashes in cache */
 			hashes: Array<Hash>
-			/** Clear the cache from all GIFs and JSON files, and return a number of how many were deleted (pairs: GIF + JSON)
-			 * @returns {number} Amount of deleted `GIF + JSON` pairs */
+			/** Clear the cache from all `GIF` and `JSON` files by pairs, and return a number of how many full pairs were deleted (pair: `GIF` + `JSON`)
+			 * @returns {number} Amount of deleted full `GIF + JSON` pairs (if one of the files doesn't exist - will not count for this pair) */
 			clear: () => number
 		}
 	}
@@ -434,7 +454,8 @@ export type Cache = {
 			checkDependencies: (id: string) => boolean
 			/** Array of all IDs in cache */
 			IDs: Array<string>
-			/** Clear the cache from all Avatar objects, and return a number of how many were deleted */
+			/** Clear the cache from all `Avatar` objects, and return a number of how many of them were deleted
+			 * @returns {number} Amount of deletet `Avatar` objects */
 			clear: () => number
 		}
 		/** Cache configuration for avatars in filesystem */
@@ -455,7 +476,7 @@ export type Cache = {
 			checkDependencies: (id: string) => AlwaysResolvingPromise<boolean>
 			/** Array of all IDs in cache */
 			IDs: Array<string>
-			/** Clear the cache from all PNG files, and return a number of how many were deleted
+			/** Clear the cache from all `PNG` files, and return a number of how many were deleted
 			 * @returns {number} Amount of deleted `PNG` files */
 			clear: () => number
 		}
@@ -473,9 +494,6 @@ export type Stats = {
 			readonly inCache: number
 			readonly processing: number
 		}
-	}
-	request: {
-		routes: string[]
 	}
 	response: {
 		average: {

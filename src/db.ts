@@ -37,6 +37,7 @@ var petpets: PetPets = new Map(),
 	hashRegex = /\d+--?\d+x-?\d+--?\d+x-?\d+-\d?\d--?\d+/g,
 	idRegex = /\d+/g,
 	// poor windows with it's `\` 😂
+	// btw, "as `template string literal`" is optional. It's just for indication
 	cacheDir = join(ROOT_PATH, "cache") as `${string}/cache`,
 	gifCacheDir = join(cacheDir, "gif") as `${string}/cache/gif`,
 	avatarCacheDir = join(cacheDir, "avatar") as `${string}/cache/avatar`
@@ -49,7 +50,7 @@ export var requestTime = {
 	cache: Cache = {
 		gif: {
 			queue: {
-				add(hash: Hash, avatar: Uint8Array, params?: PetPetParams) {
+				add(hash, avatar, params) {
 					var promise = generatePetPet(avatar, params)
 					promise.then((buffer) => {
 						addPetPetToCache(new PetPet(hash, buffer))
@@ -80,7 +81,7 @@ export var requestTime = {
 				},
 			},
 			code: {
-				set(petpet: PetPet) {
+				set(petpet) {
 					return getGlobalOption("cache")
 						? (petpets.has(petpet.hash)
 								? updateObject(petpets.get(petpet.hash)!, petpet)

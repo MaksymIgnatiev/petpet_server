@@ -490,14 +490,11 @@ export function processFlags(argList: string[]) {
 		} else flagErrors.notRecognized(argument)
 	}
 
-	if (isError) {
-		print(errorMsg)
-	}
-	if (isFlagError) {
-		print(readHelpPage)
-	} else if (!isError && !isFlagError && exit) {
-		print(printMsg)
-	}
+	if (isError) print(errorMsg)
+
+	if (isFlagError) print(readHelpPage)
+	else if (!isError && !isFlagError && exit) print(printMsg)
+
 	if (isError || isFlagError || exit) process.exit()
 	setState("ready")
 	return printMsg

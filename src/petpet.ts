@@ -15,7 +15,6 @@ var sharpBlankImageOpts = { r: 0, g: 0, b: 0, alpha: 0 },
 	finaSharplImageOpts = { palette: true, colors: 256, dither: 1 },
 	handFrames: GifFrame[],
 	FrameCount: number,
-	handGifDimensions: { width: number; height: number },
 	r = Math.round.bind(Math)
 
 export var defaultPetPetParams: { +readonly [K in keyof PetPetParams]: PetPetParams[K] } = {
@@ -38,7 +37,6 @@ Bun.file(join(ROOT_PATH, "assets", "petpet_template_modified.gif"))
 		GifUtil.read(Buffer.from(arrBuffer)).then((gif) => {
 			handFrames = gif.frames
 			FrameCount = handFrames.length
-			handGifDimensions = { width: gif.width, height: gif.height }
 		})
 	})
 

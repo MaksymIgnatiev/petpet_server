@@ -153,7 +153,7 @@ export function enterAlternateBuffer() {
 			// set the terminal raw mode to true
 			stdin.setRawMode(true)
 		} catch (e) {
-			print("Failed to enter alternate buffer:", e)
+			print("Failed to enter alternate buffer:\n", e)
 			process.exit()
 		}
 	try {
@@ -168,11 +168,12 @@ export function enterAlternateBuffer() {
 	var listener = (buffer: Buffer) => {
 		// <Ctrl> + c => SIGINT (interupt)
 		if (buffer.length === 1 && buffer[0] === 0x03) EXIT(true)
-		// <Ctrl> + z => SIGTSTP (send to background) // not sure yes
+		// <Ctrl> + z => SIGTSTP (send to background) // not sure yet
 		else if (buffer.length === 1 && buffer[0] === 0x1a) {
 			// exitAlternateBuffer()
 			process.kill(process.pid, "SIGTSTP")
 		} else {
+			// `q`, `:q`, `ZZ`, `:x` => exit the process completely
 			var str = buffer.toString().trim()
 			if (str === "q") EXIT(true)
 			else if ((str === ":" || str === "Z") && command === "") command = str
@@ -203,54 +204,61 @@ export function exitAlternateBuffer() {
 			// set the terminal raw mode to false
 			stdin.setRawMode(false)
 		} catch (e) {
-			print("Failed to enter alternate buffer:", e)
+			print("Failed to set terminal raw mode to false:\n", e)
 			process.exit()
 		}
 }
 
 export function formatDelta<T extends number, A extends boolean = false>(
-	timestamp: T,
+	delta: T,
 	accurate = false as A,
 ) {
-	var time = timestamp < 1000 ? timestamp : timestamp / 1000
+	var time = delta < 1000 ? delta : delta / 1000
 	return accurate ? +time.toFixed(3) : Math.trunc(time)
 }
 
 export function formatDeltaValue<T extends number>(delta: T) {
-	var result = formatDelta(delta, getGlobalOption("accurateTime"))
-	return `${result}${delta < 1000 ? "ms" : "s"}`
+	return `${formatDelta(delta, getGlobalOption("accurateTime"))}${delta < 1000 ? "ms" : "s"}`
 }
+
+/** @param {(message: string) => void} [fn=print] Log function that writes string to the stdout */
 export function logger(fn: (message: string) => void = print): MiddlewareHandler {
 	return async (c, next) => {
 		var { method } = c.req,
 			path = decodeURIComponent(c.req.url.match(/^https?:\/\/[^/]+(\/[^\?#]*)/)?.[1] ?? "/"),
 			start = performance.now(),
+			// memoization to not depend on options that changes during request
 			timestamps = memoize(getGlobalOption<"timestamps">, "timestamps"),
 			date = memoize(formatDate)
+		timestamps.args
 
 		// incoming request
-		fn(
-			`${timestamps.value ? `${green(`[${date.override}]`)} ` : ""}${green("<--")} ${method} ${path}`,
-		)
+		typeof fn === "function" && // who knows what type of data can be under the hood :)
+			fn(
+				`${timestamps.value ? `${green(`[${date.call}]`)} ` : ""}${green("<--")} ${method} ${path}`,
+			)
 
 		return new Promise((resolve) => {
 			next().then(() => {
 				var status = c.res.status,
 					end = performance.now(),
 					elapsed = end - start,
+					// first number of the response status code
 					statuscategory = Math.floor(status / 100) || 0,
-					colorFn: (text: any) => string
+					colorFn: (text: any) => string = yellow
+
+				// colors for coloring the status and arrow
 				if (statuscategory === 7) colorFn = purple
 				else if (statuscategory === 5) colorFn = red
 				else if (statuscategory === 3) colorFn = cyan
 				else if (statuscategory === 4 || statuscategory === 0) colorFn = yellow
 				else if (statuscategory === 1 || statuscategory === 2) colorFn = green
-				else colorFn = yellow
 
 				// outgoing response
-				fn(
-					`${timestamps.value ? `${green(`[${date.override}]`)} ` : ""}${colorFn("-->")} ${method} ${path} ${colorFn(status)} ${formatDeltaValue(elapsed)}`,
-				)
+				typeof fn === "function" &&
+					fn(
+						`${timestamps.value ? `${green(`[${date.call}]`)} ` : ""}${colorFn("-->")} ${method} ${path} ${colorFn(status)} ${formatDeltaValue(elapsed)}`,
+					)
 				resolve()
 			})
 		})
@@ -424,15 +432,17 @@ export function hasNullable(...args: unknown[]) {
  * @field override  - call the function with arguments, override the value in cache, and return the value
  * @field fn        - the given function
  * @field args      - the given arguments */
-export function memoize<T, P extends any[]>(fn: (...args: P) => T, ...args: P) {
+export function memoize<T, P extends any[]>(fn: (...args: P) => T, ...args: Readonly<P>) {
 	var result: T,
 		hasResult = false
+
+	/** Interactive object with different getters to interact with the given function, arguments, and their result */
 	return {
 		/** call the function for the first time, store result in cache, and on eacn access - return a cached result (`override` getter overrides the cached value) */
 		get value() {
 			if (!hasResult) {
 				result = fn(...args)
-				hasResult = true
+				hasResult ||= true
 			}
 			return result
 		},
@@ -643,20 +653,23 @@ export function parseLogOption(
 /** Print raw information to the stdout, depending on where the script is running (TTY or not, to include ANSI escape codes or not)
  * All arguments will be converted to string, joined with empty string (`""`), printed to the stdout with `\n` at the end to flush the buffer */
 export function print(...args: any[]) {
-	// do it "asynchronous" to not block the main task queue
-	queueMicrotask(() =>
-		stdout.write(
+	try {
+		Bun.write(
+			Bun.stdout,
 			args
 				.map(
 					stdout.isTTY
 						? String // if TTY => print as is
-						: // if not TTY => replace all ANSI escape codes
+						: // if not TTY => delete all ANSI escape codes
 							(e) => String(e).replace(/\u001b\[([\d;]+m|(\d+)?[a-zA-Z])/g, ""),
 				)
 				.join() + "\n",
-		),
-	)
+		)
+	} catch (e) {
+		console.log({ error: e })
+	}
 }
+
 export function formatObject(obj: Record<string, any>) {
 	return Object.entries(obj)
 		.map(([k, v]) => `${gray(k)}: ${colorValue(v)}`)
