@@ -322,7 +322,7 @@ export default function main(section?: (typeof helpFlags)[number]) {
 
 	!section &&
 		add(
-			`\nYou can watch a spesific section of the help page by running '${green("bun start -h/--help {section}")}' or '${green("bun run help {section}")}'\nAvailable sections: ${helpFlags.map(green).join(", ")}`,
+			`\nYou can watch a specific section of the help page by running '${green("bun start -h/--help {section}")}' or '${green("bun run help {section}")}'\nAvailable sections: ${helpFlags.map(green).join(", ")}`,
 		)
 	return result
 }
