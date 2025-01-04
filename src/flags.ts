@@ -112,8 +112,8 @@ export function setupFlagHandlers() {
 		long: "help",
 		value: "optional",
 		parameter: "[section]",
-		description: `Display this help message (${green("bun run help")}) or a spesific section. See ${green("SECTIONS")}`,
-		extendedDescription: `Display this help message (alias is also '${green("bun run help")}') or a spesific section. Available sections: ${helpFlags.map(green).join(ss(",", ", "))}`,
+		description: `Display this help message (${green("bun run help")}) or a specific section. See ${green("SECTIONS")}`,
+		extendedDescription: `Display this help message (alias is also '${green("bun run help")}') or a specific section. Available sections: ${helpFlags.map(green).join(ss(",", ", "))}`,
 		handler(value) {
 			addText(printHelp(value as (typeof helpFlags)[number]))
 			exit = true
@@ -364,7 +364,7 @@ export function setupFlagHandlers() {
 		long: "XXX",
 		value: "none",
 		parameter: "",
-		description: "test, nothing spesial",
+		description: "test, nothing special",
 		extendedDescription: "",
 		handler() {
 			print(
