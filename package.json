@@ -1,7 +1,7 @@
 {
 	"name": "petpet_http_server",
 	"version": "1.0.0",
-	"license": "MIT",
+	"license": "0BSD",
 	"module": "index.ts",
 	"type": "module",
 	"scripts": {
@@ -12,14 +12,14 @@
 		"explain": "bun run src/explain.ts -f"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.1.13"
+		"@types/bun": "^1.1.14"
 	},
 	"peerDependencies": {
-		"typescript": "^5.0.0"
+		"typescript": "^5.6.2"
 	},
 	"dependencies": {
 		"gifwrap": "^0.10.1",
-		"hono": "^4.6.1",
+		"hono": "^4.6.16",
 		"sharp": "^0.33.5"
 	}
 }
