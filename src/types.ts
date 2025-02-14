@@ -562,3 +562,7 @@ export type PetPetParams = {
 	/** What objects to include in GIF: only `"hand"`, only `"avatar"`, or `"both"` (default=`"both"`) */
 	objects: "hand" | "avatar" | "both"
 }
+
+// ------- API -------
+
+export type AvatarExtensionDiscord = "png" | "webp" | "gif"

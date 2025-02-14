@@ -78,7 +78,8 @@ var args = process.argv.slice(2),
 	noContent = (c: Context) => {
 		// do not ask again for 30 days
 		c.header("Cache-Control", `public, max-age=${cacheTime}`)
-		return c.json({ ok: true, code: 204, statusText: "No Content" }, 204)
+		c.status(204)
+		return c.json({ ok: true, code: 204, statusText: "No Content" })
 	}
 
 app.get("/favicon.ico", noContent)

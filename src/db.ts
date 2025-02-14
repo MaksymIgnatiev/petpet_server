@@ -18,7 +18,6 @@ import type {
 	AvatarQueue,
 	Avatars,
 	PetPetType,
-	PetPetParams,
 	PetPetQueue,
 	PetPets,
 	AvatarType,
@@ -26,7 +25,7 @@ import type {
 	Hash,
 	Stats,
 } from "./types"
-import { fetchAvatar } from "./avatars"
+import { fetchAvatarDiscord } from "./avatars"
 
 type BufferType = "gif" | "avatar"
 
@@ -247,7 +246,7 @@ export var requestTime = {
 			queue: {
 				add(id: string, size?: number) {
 					var promise = new Promise<Uint8Array>((resolve, reject) => {
-						fetchAvatar(id, size).then(
+						fetchAvatarDiscord(id, size).then(
 							(result) => resolve(result),
 							(e) => {
 								verboseError(
@@ -402,7 +401,6 @@ export var requestTime = {
 				},
 			},
 		},
-		request: { routes: ["/:id", "/avatar/:id"] as const },
 		response: {
 			routes: {
 				"/:id": {
