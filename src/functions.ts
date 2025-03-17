@@ -17,6 +17,7 @@ import type {
 	LogOptionLongCombination,
 	LogOptionShort,
 	LogStringOne,
+	WSMessage,
 } from "./types"
 import {
 	getGlobalOption,
@@ -41,10 +42,10 @@ export var info = customLogTag("Info", cyan),
 	compress = Bun.deflateSync,
 	decompress = Bun.inflateSync
 
-/** Call this function at the top of the file if you don't want this file to be run directly */
-export function fileNotForRunning() {
+/** Import this file in needed file if you don't want specific file to be run directly */
+export function fileNotForRunning(): boolean {
 	var file = process.argv[1].match(/[a-zA-Z0-9_\-]+\.ts$/)?.[0]
-	if (file && (file === "index.ts" || file === "help.ts" || file === "explain.ts")) return
+	if (file && (file === "index.ts" || file === "help.ts" || file === "explain.ts")) return false
 	else
 		import("./config").then(() => {
 			print(
@@ -54,6 +55,7 @@ export function fileNotForRunning() {
 			)
 			process.exit()
 		})
+	return true
 }
 
 export function customLogTag<S extends string, C extends ANSIRGB>(
@@ -222,7 +224,7 @@ export function formatDeltaValue<T extends number>(delta: T) {
 }
 
 /** @param {(message: string) => void} [fn=print] Log function that writes string to the stdout */
-export function logger(fn: (message: string) => void = print): MiddlewareHandler {
+export function APILogger(fn: (message: string) => void = print): MiddlewareHandler {
 	return async (c, next) => {
 		var { method } = c.req,
 			path = decodeURIComponent(c.req.url.match(/^https?:\/\/[^/]+(\/[^\?#]*)/)?.[1] ?? "/"),
@@ -616,7 +618,7 @@ export function sameType<T1, T2>(value1: T1, value2: T2) {
 	return typeof value1 === typeof value2
 }
 
-/** Log the error message depending on `verboseErrors` global option, if enabled - first message. Else second + error */
+/** Log the error message depending on `verboseErrors` global option, if enabled - first message only. Else second + error itself */
 export function verboseError(error: Error, onError: any, offError: any) {
 	if (getGlobalOption("verboseErrors")) log("error", onError, error)
 	else log("error", offError)

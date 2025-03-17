@@ -1,5 +1,3 @@
-fileNotForRunning()
-
 import fs from "fs"
 import { join } from "path"
 import { getGlobalOption, ROOT_PATH } from "./config"
@@ -7,7 +5,6 @@ import {
 	compress,
 	decompress,
 	error,
-	fileNotForRunning,
 	isCurrentCacheType,
 	log,
 	updateObject,
@@ -35,11 +32,10 @@ var petpets: PetPets = new Map(),
 	avatarQueue: AvatarQueue = new Map(),
 	hashRegex = /\d+--?\d+x-?\d+--?\d+x-?\d+-\d?\d--?\d+/g,
 	idRegex = /\d+/g,
-	// poor windows with it's `\` 😂
 	// btw, "as `template string literal`" is optional. It's just for indication
-	cacheDir = join(ROOT_PATH, "cache") as `${string}/cache`,
-	gifCacheDir = join(cacheDir, "gif") as `${string}/cache/gif`,
-	avatarCacheDir = join(cacheDir, "avatar") as `${string}/cache/avatar`
+	cacheDir = join(ROOT_PATH, ".cache") as `${string}/.cache`,
+	gifCacheDir = join(cacheDir, "gif") as `${string}/.cache/gif`,
+	avatarCacheDir = join(cacheDir, "avatar") as `${string}/.cache/avatar`
 
 export var requestTime = {
 		fromScratch: [] as number[],
@@ -126,7 +122,7 @@ export var requestTime = {
 					)
 					return new Promise<boolean>((resolve) => {
 						Bun.write(join(gifCacheDir, `${petpet.hash}.json`), json).then(
-							() =>
+							() => {
 								Bun.write(join(gifCacheDir, `${petpet.hash}.gif`), petpet.gif).then(
 									() => resolve(true),
 
@@ -138,15 +134,9 @@ export var requestTime = {
 										)
 										resolve(false)
 									},
-								),
-							(e) => {
-								log(
-									"error",
-									error("Error while trying to create .json file for gif:\n"),
-									e,
 								)
-								resolve(false)
 							},
+							() => resolve(false),
 						)
 					})
 				},
@@ -258,10 +248,13 @@ export var requestTime = {
 							},
 						)
 					})
-					promise.then((png) => {
-						addAvatarToCache(new Avatar(id, png))
-						avatarQueue.delete(id)
-					})
+					promise.then(
+						(png) => {
+							addAvatarToCache(new Avatar(id, png))
+							avatarQueue.delete(id)
+						},
+						() => {},
+					)
 					avatarQueue.set(id, promise)
 					return promise
 				},
@@ -536,9 +529,11 @@ function createCacheType<T extends BufferType>(type: T) {
 	} catch {}
 }
 
+/** Checks for certain cachce type to exist, and if not - creates it */
 function checkAndCreateCacheType<T extends BufferType>(type: T) {
 	if (!checkCacheTypeExist(type)) createCacheType(type)
 }
+
 export class PetPet implements PetPetType {
 	#gif!: Uint8Array
 	hash: Hash

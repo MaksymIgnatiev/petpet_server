@@ -1,6 +1,6 @@
-# Petpet HTTP server  
+# PetPet HTTP server  
 
-## Petpet HTTP server written in TypeScript, supported with Bun.js, Hono, Sharp.js, and Gifwrap
+## Petpet HTTP server written in TypeScript and Svelte.js, supported with Bun.js, Hono, Sharp.js, and Gifwrap
 
 First of all, you need a Bun runtime to run this project.  
 
@@ -13,19 +13,20 @@ To use the server:
 Clone the repo:
 ```sh
 git clone https://github.com/MaksymIgnatiev/petpet_server.git
+cd petpet_server
 ```
 
-Install dependencies:  
+1. Install dependencies:  
 ```sh
 bun install
 ```
 
-Run the projct:
+2. Run the projct:
 ```sh
 bun start 
 ```
 
-To see help page:
+2. To see help page:
 ```sh
 # More preferable
 bun run help
@@ -33,10 +34,12 @@ bun run help
 bun start -h
 ```
 
-You can spesify runtime options in `config.toml` file in the root of the project, or with flags. Read [configuration.md](/configuration.md) file for more, or see the help page with available flags.  
-There are different routes available. Documentation can be found in [routes.md](/routes.md) file.  
-Information about cache can be found in [cache.md](/cache.md) file. 
+> [!Note]
+> To access the root endpoint `/` with regular HTML (home page, sort of), you need to install dependencies inside `svelte-app` directory, and run either in development mode or build the production code.  
 
+You can spesify runtime options in `config.toml` file in the root of the project, or with flags. Read [configuration.md](configuration.md) file for more, or see the help page with available flags.  
+There are different routes available. Documentation can be found in [routes.md](routes.md) file.  
+Information about cache can be found in [cache.md](cache.md) file. 
 
 ## License
 

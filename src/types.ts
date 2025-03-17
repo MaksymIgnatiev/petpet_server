@@ -117,7 +117,10 @@ type ApplyGlobalOptionPropTypeRecursively<O extends Record<string, any>> = {
 		: GlobalOptionProp<O[K]>
 }
 
-// Options that server accepts via config file or flags. If you wish to add more options - do it here
+// Options that runtime accepts via config file or flags. If you wish to add more options - do it here
+/** Base config options
+ *
+ * Options that can be configured via flags or config file */
 export type BaseConfigOptions = {
 	/** Enable microseconds notation in milliseconds values, and milliseconds notation in minutes (default=`false`) */
 	accurateTime: boolean
@@ -149,7 +152,7 @@ export type BaseConfigOptions = {
 	 * `watch`  - log when server restarted due to changes in config file (`watch` option needs to be enabled)
 	 */
 	logOptions: LogOptions
-	/** Store cache permanent (without checks) (default=`false`) */
+	/** Store cache permanent (without checks for cache time) (default=`false`) */
 	permanentCache: boolean
 	/** Do some output, or run server without any output (during runtime, not during parsing flags/config files) (default=`true`) */
 	quiet: boolean
@@ -175,7 +178,7 @@ export type BaseConfigOptions = {
 	 * |   D    | day (of month)                                 |
 	 * |   M    | month (number)                                 |
 	 * |   N    | month (3 first letters of the month name)      |
-	 * |   Y    | year |
+	 * |   Y    | year                                           |
 	 *
 	 * _Note!_ To escape some character that are listed in formating - use backslash symbol `\` before character (you would probably need second one, to escape the escape character like `\n`, `\t` or others depending on where you write the format).
 	 * _Note!_ `microseconds` are obtained with the high precision time in milliseconds from the script start time, which has a part after period, that indicates microseconds. So it's probably not syncronized with the computer's clock time, but it can be used as a timestamp in the time.
@@ -212,7 +215,7 @@ export type AdditionalGlobalOptions = {
 // All options for the server, including special, that are not publicly accesed
 type AllGlobalConfigOptionsBase = BaseConfigOptions & AdditionalGlobalOptions
 
-// If ypu want to add more custom options - add them in `BaseConfigOptions` or `AdditionalGlobalOptions` if they need to be just for indication proposes and don\t have public access
+// If you want to add more custom options - add them in `BaseConfigOptions` or `AdditionalGlobalOptions` if they need to be just for indication proposes and don't have public access
 export type AllGlobalConfigOptions = Readonly<AllGlobalConfigOptionsBase>
 
 export type GlobalObjectOptions = FilterObjectProps<BaseConfigOptions, Record<string, any>>
@@ -252,6 +255,13 @@ export type GetLogOption<O extends LogOptionShort | LogOptionLong | LogLevel> = 
 			: never
 
 export type LogOption = LogString | LogLevel
+/** Options for logging (all default=`false`):
+ * `rest`   - log requests and responses
+ * `gif`    - log gif creation time & when gif was in cache
+ * `params` - log each gif request params
+ * `cache`  - log cache related things (perform, cleanup, info, etc.)
+ * `watch`  - log when server restarted due to changes in config file (`watch` option needs to be enabled)
+ */
 export type LogOptions<
 	R extends boolean = boolean,
 	G extends boolean = boolean,
@@ -283,6 +293,10 @@ export type LogOptionShort = {
 
 // ----- Server options -----
 
+/** Server options (default values)
+ * `port` = `3000`
+ * `host` = `"localhost"`
+ */
 export type ServerOptions<P extends number = number, H extends string = string> = {
 	/** Server port to run on (default=`3000`) */
 	port: P
@@ -358,8 +372,19 @@ export type ChechValidPetPetParams = {
 	objects?: string
 }
 
-// ?
 export type Resolve<T = any> = (value: T | PromiseLike<T>) => void
+
+// ------ Logger ------
+
+type AnyArgsFn<T = void> = (...args: any[]) => T
+/** Custom loger */
+export type Logger = {
+	info: AnyArgsFn
+	warning: AnyArgsFn
+	error: AnyArgsFn
+	level: (level: LogLevel, ...args: any[]) => void
+	combination: (combination: LogString, ...args: any[]) => void
+}
 
 // ------ Gifs/Images ------
 
@@ -566,3 +591,18 @@ export type PetPetParams = {
 // ------- API -------
 
 export type AvatarExtensionDiscord = "png" | "webp" | "gif"
+
+// API: ----- Shared -----
+
+export type Images = {
+	status: "loading" | "complete" | "no-content" | "cache-disabled"
+	value: string[]
+}
+export type ImageResponse = {
+	state: "completed" | "no-content" | "cache-disabled"
+	value?: string[]
+}
+export type WSMessageType = "new-images"
+export type WSMessage<T extends WSMessageType = WSMessageType> = {
+	type: T
+} & (T extends "new-images" ? {} : {})

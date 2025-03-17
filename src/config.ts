@@ -1,5 +1,3 @@
-fileNotForRunning()
-
 var callStackRegex =
 	/^Error\n\s*at\s+check(S|G)etStateCallStack\s+.*config\.ts.*\n\s*at\s+state\s+.*config\.ts.*\n\s*at\s+((s|g)etState|setGlobalOption)\s+.*config\.ts/
 
@@ -37,6 +35,7 @@ class Config implements GlobalOptions {
 			})
 		}
 	}
+	// Shhhhhhhhh, i know they are the same thing. I need to keep globalOptionsDefault at line 69
 	private checkSetStateCallStack() {
 		return callStackRegex.test(new Error().stack ?? "")
 	}
@@ -66,33 +65,34 @@ class Config implements GlobalOptions {
 	}
 }
 
+/** Default options for the project runtime */
 export var globalOptionsDefault: AllGlobalConfigOptions = {
 		accurateTime: true, // false
 		alternateBuffer: false, // true
-		avatars: true,
+		avatars: true, // true
 		cacheTime: 15 * 60_000, // 15 minutes in `ms`
 		cacheCheckTime: 60_000, // 1  minute  in `ms`
-		cache: true,
+		cache: true, // true
 		cacheType: "code",
-		compression: true,
+		compression: true, // true
 		clearOnRestart: false, // true
 		inAlternate: false,
-		errors: true,
-		logFeatures: false,
-		quiet: false,
-		permanentCache: false,
-		warnings: true,
+		errors: true, // true
+		logFeatures: false, // false
+		quiet: false, // false
+		permanentCache: false, // false
+		warnings: true, // true
 		watch: true, // false
 		timestamps: true, // false
 		timestampFormat: "h:m:s:S.u", // "h:m:s D.M.Y"
-		useConfig: true,
-		verboseErrors: false,
+		useConfig: true, // true
+		verboseErrors: false, // false
 		logOptions: {
 			rest: true, // false
-			gif: false,
-			params: false,
-			cache: false,
-			watch: false,
+			gif: false, // false
+			params: false, // false
+			cache: false, // false
+			watch: false, // false
 		},
 		server: {
 			port: 3000,
@@ -111,14 +111,7 @@ var globalOptions: GlobalOptions = new Config(),
 
 import { join, dirname } from "path"
 import { fileURLToPath } from "url"
-import {
-	hasNullable,
-	sameType,
-	fileNotForRunning,
-	green,
-	exitAlternateBuffer,
-	print,
-} from "./functions"
+import { hasNullable, sameType, green, exitAlternateBuffer, print } from "./functions"
 import type {
 	AdditionalGlobalOptions,
 	AllGlobalConfigOptions,
@@ -240,7 +233,6 @@ function resetGlobalOptions(root?: Record<string, any>, objToSet?: Record<string
 			objToSet[key].source = "original"
 		}
 }
-
 type FilteredObjectProperties = FilterObjectProps<GlobalOptions, Record<string, GlobalOptionProp>>
 type CompareTable = {
 	0: { 0: 0; 1: -1; 2: -1 }

@@ -2,3 +2,8 @@ node_modules/
 test.*
 *.test.*
 config.toml
+.cache/
+svelte-app/node_modules/
+svelte-app/build/
+svelte-app/.svelte-kit/
+.env

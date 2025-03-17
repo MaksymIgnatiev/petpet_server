@@ -16,7 +16,6 @@ var flagsGap = 1,
 		[["g", "gif"], "GIF creation time / When GIF was in cache"],
 		[["p", "params"], "Request parameters"],
 		[["c", "cache"], "Info about cleanup the cache"],
-		[["cache"], "Info about cleanup the cache"],
 		[
 			["w", "watch"],
 			"inform when server restarted due to changes in cofnig file (watch global option needs to be enabled)",
@@ -37,7 +36,7 @@ var flagsGap = 1,
 		[`Y`, "year"],
 	]),
 	sections: Section<string, string> = new Map([
-		["flags", "Show all available flags with extended descriptions"],
+		["flags", "Show all available flags with extended descriptions and default values"],
 		["log_options", "Show log options"],
 		["timestamp_format", "Show timestamp formating"],
 		["sections", "Show this message"],
@@ -294,7 +293,7 @@ function getTimespampOptions() {
 }
 
 function getSections() {
-	return createCLISection("SECTIONS", sections, [], 20).string
+	return createCLISection("SECTIONS", sections, [], 23).string
 }
 
 export default function main(section?: (typeof helpFlags)[number]) {

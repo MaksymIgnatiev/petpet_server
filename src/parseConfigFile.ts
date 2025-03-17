@@ -1,16 +1,8 @@
 fileNotForRunning()
 
-import {
-	globalOptionsDefault,
-	setGlobalObjectOption,
-	setGlobalOption,
-} from "./config"
+import { globalOptionsDefault, setGlobalObjectOption, setGlobalOption } from "./config"
 import { fileNotForRunning, green, log, sameType, warning } from "./functions"
-import type {
-	AllGlobalConfigOptions,
-	FilteredObjectConfigProps,
-	Values,
-} from "./types"
+import type { AllGlobalConfigOptions, Values } from "./types"
 
 function warningLog(text: string) {
 	log("warning", warning(text))
@@ -31,7 +23,7 @@ function unknownKey(type: string, key: string) {
 }
 
 export function parseToml(obj: Record<string, any>) {
-	for (var keyRaw of Object.keys(obj)) {
+	for (var keyRaw of Object.keys(obj) as unknown as keyof AllGlobalConfigOptions) {
 		var key = keyRaw as keyof AllGlobalConfigOptions
 		if (Object.hasOwn(globalOptionsDefault, key) && key !== "useConfig") {
 			var prop = obj[key]
@@ -45,8 +37,7 @@ export function parseToml(obj: Record<string, any>) {
 					setGlobalOption(key, prop, 1)
 				} else {
 					for (var propKeyRaw of Object.keys(prop)) {
-						var propKey =
-								propKeyRaw as keyof Values<FilteredObjectConfigProps>,
+						var propKey = propKeyRaw as keyof Values<FilteredObjectConfigProps>,
 							GODO = globalOptionsDefault[
 								key
 							] as unknown as Values<FilteredObjectConfigProps>
